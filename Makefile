@@ -163,15 +163,15 @@ core_publish:  ## Install, generate and publish the ingestion-core module to Tes
 
 .PHONY: core_py_antlr
 core_py_antlr:  ## Generate the Python core code for parsing FQNs under ingestion-core
-	antlr4 -Dlanguage=Python3 -o ingestion-core/src/metadata/generated/antlr ${PWD}/openmetadata-spec/src/main/antlr4/org/openmetadata/schema/*.g4
+	java org.antlr.v4.Tool -Dlanguage=Python3 -o ingestion-core/src/metadata/generated/antlr ${PWD}/openmetadata-spec/src/main/antlr4/org/openmetadata/schema/*.g4
 
 .PHONY: py_antlr
 py_antlr:  ## Generate the Python code for parsing FQNs
-	antlr4 -Dlanguage=Python3 -o ingestion/src/metadata/generated/antlr ${PWD}/openmetadata-spec/src/main/antlr4/org/openmetadata/schema/*.g4
+	java org.antlr.v4.Tool -Dlanguage=Python3 -o ingestion/src/metadata/generated/antlr ${PWD}/openmetadata-spec/src/main/antlr4/org/openmetadata/schema/*.g4
 
 .PHONY: js_antlr
 js_antlr:  ## Generate the Python code for parsing FQNs
-	antlr4 -Dlanguage=JavaScript -o openmetadata-ui/src/main/resources/ui/src/generated/antlr ${PWD}/openmetadata-spec/src/main/antlr4/org/openmetadata/schema/*.g4
+	java org.antlr.v4.Tool -Dlanguage=JavaScript -o openmetadata-ui/src/main/resources/ui/src/generated/antlr ${PWD}/openmetadata-spec/src/main/antlr4/org/openmetadata/schema/*.g4
 
 
 .PHONY: install_antlr_cli
