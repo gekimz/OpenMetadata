@@ -1,6 +1,6 @@
 from typing import Optional
 
-from metadata.generated.schema.entity.entity.automations.workflow import (
+from metadata.generated.schema.entity.automations.workflow import (
     Workflow as AutomationWorkflow,
 )
 from metadata.generated.schema.entity.services.connections.metadata.sasCatalogConnection import (

@@ -7,13 +7,17 @@ from metadata.generated.schema.entity.services.connections.metadata.sasCatalogCo
 from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
 )
+from metadata.ingestion.api.common import Entity
 from metadata.ingestion.api.source import InvalidSourceException, Source
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.source.connections import get_connection, get_test_connection_fn
 from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClient
+from metadata.utils.logger import ingestion_logger
+
+logger = ingestion_logger()
 
 
-class SASCatalogSource(Source):
+class SascatalogSource(Source):
     config: WorkflowSource
     sasCatalog_client: SASCatalogClient
 
@@ -45,6 +49,9 @@ class SASCatalogSource(Source):
         pass
 
     def next_record(self):
+        pass
+
+    def close(self):
         pass
 
     def test_connection(self) -> None:

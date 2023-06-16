@@ -4,6 +4,9 @@ from metadata.generated.schema.entity.services.connections.metadata.sasCatalogCo
     SASCatalogConnection,
 )
 from metadata.ingestion.ometa.client import REST, APIError, ClientConfig
+from metadata.utils.logger import ingestion_logger
+
+logger = ingestion_logger()
 
 
 class SASCatalogClient:
@@ -46,9 +49,13 @@ def get_token(baseURL, user, password):
     endpoint = "/SASLogon/oauth/token"
     payload = {"grant_type": "password", "username": user, "password": password}
     headers = {
-        "Content-type": "application/x-www-from-urlencoded",
-        "Authorization": "c2FzLmNsaTo=",
+        "Content-type": "application/x-www-form-urlencoded",
+        "Authorization": "Basic c2FzLmNsaTo=",
     }
     url = baseURL + endpoint
-    response = request.request("POST", url, header=headers, data=payload, verify=False)
+    response = requests.request(
+        "POST", url, headers=headers, data=payload, verify=False
+    )
+    text_response = response.json()
+    logger.info(f"this is user: {user}, password: {password}, text: {text_response}")
     return response.json()["access_token"]
