@@ -23,12 +23,15 @@ class SASCatalogClient:
             base_url=config.serverHost,
             auth_header="Authorization",
             auth_token=self.get_auth_token,
+            api_version="",
+            verify=False,
         )
         self.client = REST(client_config)
 
     def list_instances(self):
         # For now the entities we'll work with are tables
-        endpoint = "/catalog/instances?filter=contains(name,'Table')"
+        logger.info("list_instances")
+        endpoint = "catalog/instances?filter=contains(name,'Table')&limit=2"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
@@ -42,7 +45,7 @@ class SASCatalogClient:
         return response
 
     def get_auth_token(self):
-        return self.auth_token
+        return self.auth_token, 0
 
 
 def get_token(baseURL, user, password):

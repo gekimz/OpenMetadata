@@ -34,6 +34,11 @@ class SascatalogSource(Source):
 
         self.sasCatalog_client = get_connection(self.service_connection)
         self.connection_obj = self.sasCatalog_client
+        logger.info("init source")
+        test_result = self.sasCatalog_client.list_instances()
+        logger.info("after source")
+        logger.info(f"{test_result}")
+        self.test_connection()
 
     @classmethod
     def create(cls, config_dict, metadata_config: OpenMetadataConnection):
