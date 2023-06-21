@@ -1,3 +1,5 @@
+import json
+
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
@@ -37,11 +39,13 @@ class SascatalogSource(Source):
         logger.info("init source")
         test_result = self.sasCatalog_client.list_instances()
         logger.info("after source")
-        logger.info(f"{test_result}")
+        test_table = self.create_table_entity(test_result[0])
+        logger.info(f"success {test_table}")
         self.test_connection()
 
     @classmethod
     def create(cls, config_dict, metadata_config: OpenMetadataConnection):
+        logger.info(f"running create {config_dict}")
         config: WorkflowSource = WorkflowSource.parse_obj(config_dict)
         connection: SASCatalogConnection = config.serviceConnection.__root__.config
         if not isinstance(connection, SASCatalogConnection):
@@ -54,7 +58,22 @@ class SascatalogSource(Source):
         pass
 
     def next_record(self):
-        pass
+        table_entities = self.sasCatalog_client.list_instances()
+        for table in table_entities:
+            yield from self.create_table_entity(table)
+
+    def create_table_entity(self, table):
+        # Create database + db service
+        # Create database schema
+
+        table_id = table["id"]
+        views_query = {
+            "query": "match (t:dataSet)-[r:dataSetDataFields]->(c:dataField) return t,r,c",
+            "parameters": {"t": {"id": f"{table_id}"}},
+        }
+        views_data = json.dumps(views_query)
+        views = self.sasCatalog_client.get_views(views_data)
+        return views
 
     def close(self):
         pass

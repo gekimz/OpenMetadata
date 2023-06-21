@@ -45,10 +45,10 @@ class SASCatalogClient:
         return response
 
     def get_views(self, query):
-        endpoint = f"catalog/instances"
+        endpoint = "catalog/instances"
         headers = {
             "Content-type": "application/vnd.sas.metadata.instance.query+json",
-            "Accept": "application/vnd.sas.metadata.instance.archive+json",
+            "Accept": "application/json",
         }
         logger.info(f"{query}")
         response = self.client._request(
@@ -56,6 +56,7 @@ class SASCatalogClient:
         )
         if "error" in response.keys():
             raise APIError(f"{response}")
+        logger.info("get_views success")
         return response
 
     def get_auth_token(self):
