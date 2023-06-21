@@ -1,5 +1,8 @@
 import json
+from typing import List
 
+from metadata.generated.schema.api.data.createTable import CreateTableRequest
+from metadata.generated.schema.entity.data.table import Column
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
@@ -13,6 +16,7 @@ from metadata.ingestion.api.common import Entity
 from metadata.ingestion.api.source import InvalidSourceException, Source
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.source.connections import get_connection, get_test_connection_fn
+from metadata.ingestion.source.database.column_type_parser import ColumnTypeParser
 from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClient
 from metadata.utils.logger import ingestion_logger
 
@@ -67,13 +71,53 @@ class SascatalogSource(Source):
         # Create database schema
 
         table_id = table["id"]
+        table_name = table["name"]
+        table_extension = table["attributes"]
         views_query = {
             "query": "match (t:dataSet)-[r:dataSetDataFields]->(c:dataField) return t,r,c",
             "parameters": {"t": {"id": f"{table_id}"}},
         }
         views_data = json.dumps(views_query)
         views = self.sasCatalog_client.get_views(views_data)
-        return views
+        views_obj = json.loads(views)
+        entities = views_obj["entities"]
+
+        # For now many dataField attributes will be cut since currently there is no functionality for adding custom
+        # attributes to columns - luckily this functionality exists for tables so dataSet fields will be included
+        columns: List[Column] = []
+        col_count = (
+            0
+            if "columnCount" not in table_extension
+            else table_extension["columnCount"]
+        )
+        counter = 0
+
+        # Creating the columns of the table
+        for entity in entities:
+            if entity["id"] == table_id:
+                continue
+            if "Column" not in entity["type"]:
+                continue
+            counter += 1
+            col_attributes = entity["attributes"]
+            datatype = col_attributes["casDataType"]
+            parsed_string = ColumnTypeParser._parse_datatype_string(datatype)
+            parsed_string["name"] = entity["name"]
+            # Column profile to be added
+            col = Column(**parsed_string)
+            columns.append(col)
+
+        assert counter == col_count
+
+        table_request = CreateTableRequest(
+            name=table_id,
+            displayName=table_name,
+            columns=columns,
+            databaseSchema=...,  # To be added
+            extension=...,  # To be added
+        )
+
+        yield table_request
 
     def close(self):
         pass

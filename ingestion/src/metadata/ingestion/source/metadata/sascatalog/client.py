@@ -31,7 +31,10 @@ class SASCatalogClient:
     def list_instances(self):
         # For now the entities we'll work with are tables
         logger.info("list_instances")
-        endpoint = "catalog/instances?filter=contains(name,'Table')&limit=2"
+        cas_table_id = "3a0d5d7b-a1c5-44c6-bfad-0d2174236172"
+        sas_table_id = "02b7102c-e997-465d-9f41-2491c3a4f05b"
+        filter_state = f"filter=or(eq(definitionId,'{cas_table_id}'),eq(definitionId,'{sas_table_id}'))"
+        endpoint = f"catalog/instances?{filter_state}&limit=2"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
