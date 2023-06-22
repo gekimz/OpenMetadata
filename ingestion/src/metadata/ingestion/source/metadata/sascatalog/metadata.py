@@ -2,12 +2,24 @@ import json
 from typing import List
 
 from metadata.generated.schema.api.data.createTable import CreateTableRequest
+from metadata.generated.schema.api.services.createDatabaseService import (
+    CreateDatabaseServiceRequest,
+)
 from metadata.generated.schema.entity.data.table import Column
+from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
+    CustomDatabaseConnection,
+    CustomDatabaseType,
+)
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
 from metadata.generated.schema.entity.services.connections.metadata.sasCatalogConnection import (
     SASCatalogConnection,
+)
+from metadata.generated.schema.entity.services.databaseService import (
+    DatabaseConnection,
+    DatabaseService,
+    DatabaseServiceType,
 )
 from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
@@ -65,6 +77,35 @@ class SascatalogSource(Source):
         table_entities = self.sasCatalog_client.list_instances()
         for table in table_entities:
             yield from self.create_table_entity(table)
+
+    def create_database_service(self, service_name):
+        # Create a custom database connection config
+        # I wonder what will happen if you use this source class as the source python class
+        db_service = CreateDatabaseServiceRequest(
+            name=service_name,
+            serviceType=DatabaseServiceType.CustomDatabase,
+            connection=DatabaseConnection(
+                config=CustomDatabaseConnection(
+                    type=CustomDatabaseType.CustomDatabase,
+                    sourcePythonClass="metadata.SascatalogSource",
+                )
+            ),
+        )
+        db_service_entity = self.metadata.create_or_update(data=db_service)
+        if db_service_entity is None:
+            logger.error(f"Create a service with name {service_name}")
+        return db_service_entity
+
+    def _yield_create_database(self, db_name):
+        # We find the name of the mock DB service
+        pass
+
+    def _yield_create_database_schema(self, table):
+        table_detail = self.sasCatalog_client.get_instance(table["id"])
+        # We find the name of the database
+        # We first see if the table is a member of the library through the relationships attribute
+        # Or we could use views to query the dataStores
+        pass
 
     def create_table_entity(self, table):
         # Create database + db service

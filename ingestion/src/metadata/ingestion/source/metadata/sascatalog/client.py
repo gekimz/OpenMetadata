@@ -42,7 +42,11 @@ class SASCatalogClient:
 
     def get_instance(self, instanceId):
         endpoint = f"catalog/instances/{instanceId}"
-        response = self.client.get(endpoint)
+        headers = {
+            "Content-type": "application/vnd.sas.metadata.instance.entity.detail+json",
+            "Accept": "application/vnd.sas.metadata.instance.entity.detail+json",
+        }
+        response = self.client._request("GET", path=endpoint, headers=headers)
         if "error" in response.keys():
             raise APIError(response["error"])
         return response
