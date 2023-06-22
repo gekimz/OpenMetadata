@@ -1,6 +1,10 @@
 import json
 from typing import List
 
+from metadata.generated.schema.api.data.createDatabase import CreateDatabaseRequest
+from metadata.generated.schema.api.data.createDatabaseSchema import (
+    CreateDatabaseSchemaRequest,
+)
 from metadata.generated.schema.api.data.createTable import CreateTableRequest
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
@@ -79,6 +83,9 @@ class SascatalogSource(Source):
             yield from self.create_table_entity(table)
 
     def create_database_service(self, service_name):
+        # I should also probably add some functionality to check if a db_service, db, db_schema already exist
+        # on Open Metadata's end
+
         # Create a custom database connection config
         # I wonder what will happen if you use this source class as the source python class
         db_service = CreateDatabaseServiceRequest(
@@ -96,16 +103,40 @@ class SascatalogSource(Source):
             logger.error(f"Create a service with name {service_name}")
         return db_service_entity
 
-    def _yield_create_database(self, db_name):
+    def create_database(self, db):
         # We find the name of the mock DB service
-        pass
 
-    def _yield_create_database_schema(self, table):
+        database = CreateDatabaseRequest(
+            # To be added
+        )
+        database_entity = self.metadata.create_or_update(data=database)
+        return database_entity
+
+    def create_database_schema(self, table):
         table_detail = self.sasCatalog_client.get_instance(table["id"])
-        # We find the name of the database
+        # We find the "database" entity in catalog
         # We first see if the table is a member of the library through the relationships attribute
         # Or we could use views to query the dataStores
-        pass
+        data_store_data_sets = "4b114f6e-1c2a-4060-9184-6809a612f27b"
+        data_store_id = None
+        for relation in table_detail["relationships"]:
+            if relation["definitionId"] != data_store_data_sets:
+                continue
+            data_store_id = relation["endpointId"]
+            break
+
+        if data_store_id is None:
+            # For now we'll print error since we are exclusively working with tables in dataTables
+            logger.error("Data store id should not be none")
+            return None
+
+        data_store = self.sasCatalog_client.get_instance(data_store_id)
+        database = self.create_database(data_store)
+        db_schema = CreateDatabaseSchemaRequest(
+            name=data_store["name"], database=database.fullyQualifiedName
+        )
+        db_schema_entity = self.metadata.create_or_update(db_schema)
+        return db_schema_entity
 
     def create_table_entity(self, table):
         # Create database + db service
