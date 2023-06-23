@@ -24,6 +24,7 @@ class SASCatalogClient:
             auth_header="Authorization",
             auth_token=self.get_auth_token,
             api_version="",
+            allow_redirects=True,
             verify=False,
         )
         self.client = REST(client_config)
@@ -68,7 +69,11 @@ class SASCatalogClient:
         return response
 
     def get_data_source(self, endpoint):
-        response = self.client.get(endpoint)
+        headers = {
+            "Accept-Item": "application/vnd.sas.data.source+json",
+        }
+        response = self.client._request("GET", path=endpoint, headers=headers)
+        logger.info(f"{response}")
         if "error" in response.keys():
             raise APIError(response["error"])
         return response

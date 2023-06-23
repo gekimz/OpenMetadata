@@ -107,7 +107,8 @@ class SascatalogSource(Source):
         # We find the name of the mock DB service
         # Use the link to the parent of the resourceId of the datastore itself, and use its name
         # Then the db service name will be the provider id
-        data_store_endpoint = db["resourceURI"][1:]
+        data_store_endpoint = db["resourceId"][1:]
+        logger.info(f"{data_store_endpoint}")
         data_store_resource = self.sasCatalog_client.get_data_source(
             data_store_endpoint
         )
@@ -125,7 +126,7 @@ class SascatalogSource(Source):
         database = CreateDatabaseRequest(
             name=data_store_parent["id"],
             displayName=data_store_parent["name"],
-            service=db_service,
+            service=db_service.fullyQualifiedName,
         )
         database_entity = self.metadata.create_or_update(data=database)
         return database_entity
@@ -169,8 +170,8 @@ class SascatalogSource(Source):
         }
         views_data = json.dumps(views_query)
         views = self.sasCatalog_client.get_views(views_data)
-        views_obj = json.loads(views)
-        entities = views_obj["entities"]
+        # views_obj = json.loads(views)
+        entities = views["entities"]
 
         # For now many dataField attributes will be cut since currently there is no functionality for adding custom
         # attributes to columns - luckily this functionality exists for tables so dataSet fields will be included
@@ -194,6 +195,12 @@ class SascatalogSource(Source):
             parsed_string = ColumnTypeParser._parse_datatype_string(datatype)
             parsed_string["name"] = entity["name"]
             # Column profile to be added
+            if (
+                datatype in ["char", "varchar", "binary", "varbinary"]
+                and "charsMaxCount" in col_attributes
+            ):
+                parsed_string["dataLength"] = col_attributes["charsMaxCount"]
+            logger.info(f"This is parsed string: {parsed_string}")
             col = Column(**parsed_string)
             columns.append(col)
 
@@ -203,7 +210,7 @@ class SascatalogSource(Source):
             name=table_id,
             displayName=table_name,
             columns=columns,
-            databaseSchema=database_schema
+            databaseSchema=database_schema.fullyQualifiedName
             # extension=...,  # To be added
         )
 
