@@ -105,9 +105,27 @@ class SascatalogSource(Source):
 
     def create_database(self, db):
         # We find the name of the mock DB service
+        # Use the link to the parent of the resourceId of the datastore itself, and use its name
+        # Then the db service name will be the provider id
+        data_store_endpoint = db["resourceURI"][1:]
+        data_store_resource = self.sasCatalog_client.get_data_source(
+            data_store_endpoint
+        )
+        db_service = self.create_database_service(data_store_resource["providerId"])
 
+        data_store_parent_endpoint = ""
+        for link in data_store_resource["links"]:
+            if link["rel"] == "parent":
+                data_store_parent_endpoint = link["uri"][1:]
+                break
+
+        data_store_parent = self.sasCatalog_client.get_data_source(
+            data_store_parent_endpoint
+        )
         database = CreateDatabaseRequest(
-            # To be added
+            name=data_store_parent["id"],
+            displayName=data_store_parent["name"],
+            service=db_service,
         )
         database_entity = self.metadata.create_or_update(data=database)
         return database_entity
@@ -141,7 +159,7 @@ class SascatalogSource(Source):
     def create_table_entity(self, table):
         # Create database + db service
         # Create database schema
-
+        database_schema = self.create_database_schema(table)
         table_id = table["id"]
         table_name = table["name"]
         table_extension = table["attributes"]
@@ -185,8 +203,8 @@ class SascatalogSource(Source):
             name=table_id,
             displayName=table_name,
             columns=columns,
-            databaseSchema=...,  # To be added
-            extension=...,  # To be added
+            databaseSchema=database_schema
+            # extension=...,  # To be added
         )
 
         yield table_request

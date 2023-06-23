@@ -67,6 +67,12 @@ class SASCatalogClient:
         logger.info("get_views success")
         return response
 
+    def get_data_source(self, endpoint):
+        response = self.client.get(endpoint)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        return response
+
     def get_auth_token(self):
         return self.auth_token, 0
 
