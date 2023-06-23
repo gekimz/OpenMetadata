@@ -36,7 +36,7 @@ class SASCatalogClient:
         sas_table_id = "02b7102c-e997-465d-9f41-2491c3a4f05b"
         extra_f = "contains(resourceId, 'dataTables')"
         filter_state = f"filter=and(or(eq(definitionId,'{cas_table_id}'),eq(definitionId,'{sas_table_id}')),{extra_f})"
-        endpoint = f"catalog/instances?{filter_state}&limit=2"
+        endpoint = f"catalog/instances?{filter_state}"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])

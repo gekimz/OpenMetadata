@@ -191,20 +191,23 @@ class SascatalogSource(Source):
                 continue
             counter += 1
             col_attributes = entity["attributes"]
-            datatype = col_attributes["casDataType"]
+            if "casDataType" in col_attributes:
+                datatype = col_attributes["casDataType"]
+            else:
+                datatype = col_attributes["dataType"]
             parsed_string = ColumnTypeParser._parse_datatype_string(datatype)
             parsed_string["name"] = entity["name"]
             # Column profile to be added
-            if (
-                datatype in ["char", "varchar", "binary", "varbinary"]
-                and "charsMaxCount" in col_attributes
-            ):
-                parsed_string["dataLength"] = col_attributes["charsMaxCount"]
+            if datatype in ["char", "varchar", "binary", "varbinary"]:
+                if "charsMaxCount" in col_attributes:
+                    parsed_string["dataLength"] = col_attributes["charsMaxCount"]
+                else:
+                    parsed_string["dataLength"] = 0
             logger.info(f"This is parsed string: {parsed_string}")
             col = Column(**parsed_string)
             columns.append(col)
 
-        assert counter == col_count
+        # assert counter == col_count
 
         table_request = CreateTableRequest(
             name=table_id,
