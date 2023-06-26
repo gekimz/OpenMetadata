@@ -19,6 +19,10 @@ from metadata.generated.schema.entity.services.connections.database.customDataba
     CustomDatabaseConnection,
     CustomDatabaseType,
 )
+from metadata.generated.schema.entity.services.connections.database.mysqlConnection import (
+    MysqlConnection,
+    MySQLType,
+)
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
@@ -93,6 +97,7 @@ class SascatalogSource(Source):
 
         # Create a custom database connection config
         # I wonder what will happen if you use this source class as the source python class
+        # For custom database connections - we will provide client credentials via the connection options
         db_service = CreateDatabaseServiceRequest(
             name=service_name,
             serviceType=DatabaseServiceType.CustomDatabase,
@@ -103,6 +108,7 @@ class SascatalogSource(Source):
                 )
             ),
         )
+
         db_service_entity = self.metadata.create_or_update(data=db_service)
         if db_service_entity is None:
             logger.error(f"Create a service with name {service_name}")
@@ -205,14 +211,13 @@ class SascatalogSource(Source):
             parsed_string = ColumnTypeParser._parse_datatype_string(datatype)
             col_name = entity["name"]
             parsed_string["name"] = col_name.replace('"', "'")
-
+            parsed_string["ordinalPosition"] = col_attributes["ordinalPosition"]
             # Column profile to be added
             attr_map = {
                 "mean": "mean",
                 "median": "sum",
                 "min": "min",
                 "max": "max",
-                "ordinalPosition": "ordinalPosition",
                 "standardDeviation": "stddev",
                 "missingCount": "missingCount",
                 "completenessPercent": "valuesPercentage",
