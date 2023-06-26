@@ -1,4 +1,5 @@
 import json
+import time
 from typing import List
 
 from metadata.generated.schema.api.data.createDatabase import CreateDatabaseRequest
@@ -9,7 +10,11 @@ from metadata.generated.schema.api.data.createTable import CreateTableRequest
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
 )
-from metadata.generated.schema.entity.data.table import Column
+from metadata.generated.schema.entity.data.table import (
+    Column,
+    ColumnProfile,
+    CustomMetricProfile,
+)
 from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
     CustomDatabaseConnection,
     CustomDatabaseType,
@@ -195,9 +200,69 @@ class SascatalogSource(Source):
                 datatype = col_attributes["casDataType"]
             else:
                 datatype = col_attributes["dataType"]
+            if datatype == "num":
+                datatype = "numeric"
             parsed_string = ColumnTypeParser._parse_datatype_string(datatype)
-            parsed_string["name"] = entity["name"]
+            col_name = entity["name"]
+            parsed_string["name"] = col_name.replace('"', "'")
+
             # Column profile to be added
+            attr_map = {
+                "mean": "mean",
+                "median": "sum",
+                "min": "min",
+                "max": "max",
+                "ordinalPosition": "ordinalPosition",
+                "standardDeviation": "stddev",
+                "missingCount": "missingCount",
+                "completenessPercent": "valuesPercentage",
+                "uniquenessPercent": "uniqueProportion",
+                "cardinalityCount": "distinctCount",
+                "skewness": "nonParametricSkew",
+                "quantiles25": "firstQuartile",
+                "quantiles50": "median",
+                "quantiles75": "thirdQuartile",
+                "blankValueCount": "nullCount",
+                "charsMinCount": "minLength",
+                "charsMaxCount": "maxLength",
+                "rawLength": "valuesCount",
+            }
+            extra_metrics = [
+                "nOutliers",
+                "mode",
+                "semanticTypeScore",
+                "mostCommonValue",
+                "leastCommonValue",
+                "mismatchedCount",
+                "nRowsPositiveSentiment",
+                "nRowsNegativeSentiment",
+                "nRowsNeutralSentiment",
+                "pctRowsPositiveSentiment",
+                "pctRowsNegativeSentiment",
+                "pctRowsNeutralSentiment",
+                "sentimentIDScore",
+            ]
+            col_profile_dict = dict()
+            for attr in attr_map:
+                if attr in col_attributes:
+                    col_profile_dict[attr_map[attr]] = col_attributes[attr]
+            custom_metrics_list: List[CustomMetricProfile] = []
+            for metric in extra_metrics:
+                if metric in col_attributes:
+                    if (datatype != "numeric") ^ (
+                        metric in ["mode", "mostCommonValue", "leastCommonValue"]
+                    ):
+                        custom_metrics = CustomMetricProfile(
+                            name=metric, value=col_attributes[metric]
+                        )
+                        custom_metrics_list.append(custom_metrics)
+            col_profile_dict["customMetricsProfile"] = custom_metrics_list
+            timestamp = time.time() * 1000
+            col_profile_dict["timestamp"] = timestamp
+            col_profile_dict["name"] = parsed_string["name"]
+            column_profile = ColumnProfile(**col_profile_dict)
+            parsed_string["profile"] = column_profile
+
             if datatype in ["char", "varchar", "binary", "varbinary"]:
                 if "charsMaxCount" in col_attributes:
                     parsed_string["dataLength"] = col_attributes["charsMaxCount"]
