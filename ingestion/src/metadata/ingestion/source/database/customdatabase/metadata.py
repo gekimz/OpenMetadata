@@ -1,5 +1,9 @@
 from typing import Iterable
 
+from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
+    CustomDatabaseConnection,
+    CustomDatabaseType,
+)
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
@@ -14,6 +18,9 @@ from metadata.ingestion.api.source import InvalidSourceException, Source
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.source.connections import get_connection, get_test_connection_fn
 from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClient
+from metadata.utils.logger import ingestion_logger
+
+logger = ingestion_logger()
 
 
 class SASCatalogDB(Source):
@@ -33,13 +40,20 @@ class SASCatalogDB(Source):
         )
 
         self.sas_catalog_client = get_connection(self.sas_connection)
-        self.test_connection()
+        logger.info("initing...")
+        # self.test_connection()
 
     @classmethod
     def create(
         cls, config_dict: dict, metadata_config: OpenMetadataConnection
     ) -> "Source":
-        pass
+        config: WorkflowSource = WorkflowSource.parse_obj(config_dict)
+        connection: CustomDatabaseConnection = config.serviceConnection.__root__.config
+        if not isinstance(connection, CustomDatabaseConnection):
+            raise InvalidSourceException(
+                f"Expected CustomDatabaseConnection, but got {connection}"
+            )
+        return cls(config, metadata_config)
 
     def prepare(self):
         pass
@@ -48,7 +62,10 @@ class SASCatalogDB(Source):
         pass
 
     def test_connection(self) -> None:
-        pass
+        test_connection_fn = get_connection(self.service_connection)
+        test_connection_fn(
+            self.metadata, self.sas_catalog_client, self.service_connection
+        )
 
     def close(self):
         pass
