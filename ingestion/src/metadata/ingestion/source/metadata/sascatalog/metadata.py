@@ -2,6 +2,8 @@ import json
 import time
 from typing import List
 
+import jsonpatch
+
 from metadata.generated.schema.api.data.createDatabase import CreateDatabaseRequest
 from metadata.generated.schema.api.data.createDatabaseSchema import (
     CreateDatabaseSchemaRequest,
@@ -14,6 +16,7 @@ from metadata.generated.schema.entity.data.table import (
     Column,
     ColumnProfile,
     CustomMetricProfile,
+    Table,
 )
 from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
     CustomDatabaseConnection,
@@ -47,6 +50,7 @@ from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClien
 from metadata.ingestion.source.metadata.sascatalog.extension_attr import (
     TABLE_CUSTOM_ATTR,
 )
+from metadata.utils import fqn
 from metadata.utils.logger import ingestion_logger
 
 logger = ingestion_logger()
@@ -71,6 +75,10 @@ class SascatalogSource(Source):
         self.connection_obj = self.sasCatalog_client
         self.test_connection()
 
+        self.db_service_name = None
+        self.db_name = None
+        self.db_schema_name = None
+
     # self.add_table_custom_attributes()
 
     @classmethod
@@ -91,8 +99,6 @@ class SascatalogSource(Source):
         table_entities = self.sasCatalog_client.list_instances()
         for table in table_entities:
             yield from self.create_table_entity(table)
-            table_ext = table["attributes"]
-            table_entity = self.metadata.get_by_name()
 
     def create_database_service(self, service_name):
         # I should also probably add some functionality to check if a db_service, db, db_schema already exist
@@ -101,6 +107,7 @@ class SascatalogSource(Source):
         # Create a custom database connection config
         # I wonder what will happen if you use this source class as the source python class
         # For custom database connections - we will provide client credentials via the connection options
+        self.db_service_name = service_name
         db_service = CreateDatabaseServiceRequest(
             name=service_name,
             serviceType=DatabaseServiceType.CustomDatabase,
@@ -137,6 +144,7 @@ class SascatalogSource(Source):
         data_store_parent = self.sasCatalog_client.get_data_source(
             data_store_parent_endpoint
         )
+        self.db_name = data_store_parent["id"]
         database = CreateDatabaseRequest(
             name=data_store_parent["id"],
             displayName=data_store_parent["name"],
@@ -165,6 +173,7 @@ class SascatalogSource(Source):
 
         data_store = self.sasCatalog_client.get_instance(data_store_id)
         database = self.create_database(data_store)
+        self.db_schema_name = data_store["name"]
         db_schema = CreateDatabaseSchemaRequest(
             name=data_store["name"], database=database.fullyQualifiedName
         )
@@ -299,6 +308,29 @@ class SascatalogSource(Source):
         )
 
         yield table_request
+
+        table_fqn = fqn.build(
+            self.metadata,
+            entity_type=Table,
+            service_name=self.db_service_name,
+            database_name=self.db_name,
+            schema_name=self.db_schema_name,
+            table_name=table_id,
+        )
+
+        table_entity = self.metadata.get_by_name(entity=Table, fqn=table_fqn)
+        patches = []
+        for attr in table_extension:
+            patch = {
+                "op": "add",
+                "path": "/extension",
+                "value": {f"{attr}": f"{table_extension[attr]}"},
+            }
+            patches.append(patch)
+        patch = [{"op": "add", "path": "/extension", "value": table_extension}]
+        self.metadata.client.patch(
+            path=f"/tables/{table_entity.id.__root__}", data=json.dumps(patch)
+        )
 
     def add_table_custom_attributes(self):
         table_type = self.metadata.client.get(path="/metadata/types/name/table")
