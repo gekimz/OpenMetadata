@@ -37,12 +37,16 @@ from metadata.generated.schema.entity.services.databaseService import (
 from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
 )
+from metadata.generated.schema.type.basic import EntityExtension
 from metadata.ingestion.api.common import Entity
 from metadata.ingestion.api.source import InvalidSourceException, Source
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.source.connections import get_connection, get_test_connection_fn
 from metadata.ingestion.source.database.column_type_parser import ColumnTypeParser
 from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClient
+from metadata.ingestion.source.metadata.sascatalog.extension_attr import (
+    TABLE_CUSTOM_ATTR,
+)
 from metadata.utils.logger import ingestion_logger
 
 logger = ingestion_logger()
@@ -65,12 +69,9 @@ class SascatalogSource(Source):
 
         self.sasCatalog_client = get_connection(self.service_connection)
         self.connection_obj = self.sasCatalog_client
-        logger.info("init source")
-        test_result = self.sasCatalog_client.list_instances()
-        logger.info("after source")
-        test_table = self.create_table_entity(test_result[0])
-        logger.info(f"success {test_table}")
         self.test_connection()
+
+    # self.add_table_custom_attributes()
 
     @classmethod
     def create(cls, config_dict, metadata_config: OpenMetadataConnection):
@@ -90,6 +91,8 @@ class SascatalogSource(Source):
         table_entities = self.sasCatalog_client.list_instances()
         for table in table_entities:
             yield from self.create_table_entity(table)
+            table_ext = table["attributes"]
+            table_entity = self.metadata.get_by_name()
 
     def create_database_service(self, service_name):
         # I should also probably add some functionality to check if a db_service, db, db_schema already exist
@@ -104,7 +107,7 @@ class SascatalogSource(Source):
             connection=DatabaseConnection(
                 config=CustomDatabaseConnection(
                     type=CustomDatabaseType.CustomDatabase,
-                    sourcePythonClass="metadata.SascatalogSource",
+                    sourcePythonClass="metadata.ingestion.source.database.customdatabase.metadata.SASCatalogDB",
                 )
             ),
         )
@@ -278,16 +281,35 @@ class SascatalogSource(Source):
             columns.append(col)
 
         # assert counter == col_count
+        logger.info(f"{table_extension}")
+        # Building table extension attr
+        table_ext_attr = EntityExtension(__root__=table_extension)
+
+        for attr in table_extension:
+            if type(table_extension[attr]) == bool:
+                table_extension[attr] = str(table_extension[attr])
 
         table_request = CreateTableRequest(
             name=table_id,
             displayName=table_name,
             columns=columns,
-            databaseSchema=database_schema.fullyQualifiedName
+            databaseSchema=database_schema.fullyQualifiedName,
+            # extension=table_extension
             # extension=...,  # To be added
         )
 
         yield table_request
+
+    def add_table_custom_attributes(self):
+        table_type = self.metadata.client.get(path="/metadata/types/name/table")
+        table_id = table_type["id"]
+        for attr in TABLE_CUSTOM_ATTR:
+            self.metadata.client.put(
+                path=f"/metadata/types/{table_id}", data=json.dumps(attr)
+            )
+
+    def update_table_custom_attributes(self):
+        pass
 
     def close(self):
         pass

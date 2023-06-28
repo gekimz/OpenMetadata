@@ -128,6 +128,11 @@ TABLE_CUSTOM_ATTR = [
         "propertyType": {"id": "95b4a74c-21e8-4bec-b097-0659837da2b3", "type": "type"},
     },
     {
+        "name": "runStatus",
+        "description": "Agent run status.",
+        "propertyType": {"id": "95b4a74c-21e8-4bec-b097-0659837da2b3", "type": "type"},
+    },
+    {
         "name": "nColsPositiveSentiment",
         "description": "The number of columns with a positive sentiment polarity.",
         "propertyType": {"id": "7aedff86-ba7d-479d-9296-fea4a223ffab", "type": "type"},
