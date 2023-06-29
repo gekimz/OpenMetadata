@@ -188,6 +188,11 @@ class SascatalogSource(Source):
         # Create database + db service
         # Create database schema
         database_schema = self.create_database_schema(table)
+        print(
+            self.sasCatalog_client.get_rows(
+                self.sasCatalog_client.get_instance(table["id"])["resourceId"][1:]
+            )
+        )
         table_id = table["id"]
         table_name = table["name"]
         table_extension = table["attributes"]
@@ -277,13 +282,25 @@ class SascatalogSource(Source):
 
             if "rowCount" in table_extension:
                 col_profile_dict["valuesCount"] = table_extension["rowCount"]
-            if (
-                "distinctCount" in col_profile_dict
-                and "valuesCount" in col_profile_dict
-            ):
-                col_profile_dict["distinctProportion"] = (
-                    col_profile_dict["distinctCount"] / col_profile_dict["valuesCount"]
-                )
+            if "valuesCount" in col_profile_dict:
+                if "distinctCount" in col_profile_dict:
+                    col_profile_dict["distinctProportion"] = (
+                        col_profile_dict["distinctCount"]
+                        / col_profile_dict["valuesCount"]
+                    )
+                if "nullCount" in col_profile_dict:
+                    col_profile_dict["nullProportion"] = (
+                        col_profile_dict["nullCount"] / col_profile_dict["valuesCount"]
+                    )
+                if "missingCount" in col_profile_dict:
+                    col_profile_dict["missingPercentage"] = (
+                        col_profile_dict["missingCount"]
+                        / col_profile_dict["valuesCount"]
+                    )
+                    col_profile_dict["validCount"] = (
+                        col_profile_dict["valuesCount"]
+                        - col_profile_dict["missingCount"]
+                    )
 
             custom_metrics_list: List[CustomMetricProfile] = []
             for metric in extra_metrics:

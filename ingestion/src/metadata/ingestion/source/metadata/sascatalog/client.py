@@ -36,7 +36,7 @@ class SASCatalogClient:
         sas_table_id = "02b7102c-e997-465d-9f41-2491c3a4f05b"
         extra_f = "contains(resourceId, 'dataTables')"
         filter_state = f"filter=and(or(eq(definitionId,'{cas_table_id}'),eq(definitionId,'{sas_table_id}')),{extra_f})"
-        endpoint = f"catalog/instances?{filter_state}"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
@@ -77,6 +77,29 @@ class SASCatalogClient:
         if "error" in response.keys():
             raise APIError(response["error"])
         return response
+
+    def get_rows(self, endpoint):
+        # Retrieve resouceId attribute of table instance
+        data_table = self.client.get(endpoint)
+        if "error" in data_table.keys():
+            raise APIError(data_table["error"])
+        links = data_table["links"]
+        rows_uri = None
+        load_uri = None
+        for link in links:
+            if rows_uri and load_uri:
+                break
+            if link["rel"] == "rows":
+                rows_uri = link["uri"][1:]
+            if link["rel"] == "load":
+                load_uri = link["uri"][1:]
+        if load_uri:
+            headers = {"Content-type": "text/plain"}
+            # self.client._request("PUT", path=load_uri, headers=headers)
+        rows = self.client.get(rows_uri)
+        if "error" in rows.keys():
+            raise APIError(data_table["error"])
+        return rows
 
     def get_auth_token(self):
         return self.auth_token, 0
