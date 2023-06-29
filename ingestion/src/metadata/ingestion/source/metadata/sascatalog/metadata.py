@@ -20,6 +20,7 @@ from metadata.generated.schema.entity.data.table import (
     ColumnProfile,
     CustomMetricProfile,
     Table,
+    TableData,
     TableProfile,
 )
 from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
@@ -188,14 +189,12 @@ class SascatalogSource(Source):
         # Create database + db service
         # Create database schema
         database_schema = self.create_database_schema(table)
-        print(
-            self.sasCatalog_client.get_rows(
-                self.sasCatalog_client.get_instance(table["id"])["resourceId"][1:]
-            )
-        )
         table_id = table["id"]
         table_name = table["name"]
         table_extension = table["attributes"]
+        table_resource_id = self.sasCatalog_client.get_instance(table_id)["resourceId"][
+            1:
+        ]
         views_query = {
             "query": "match (t:dataSet)-[r:dataSetDataFields]->(c:dataField) return t,r,c",
             "parameters": {"t": {"id": f"{table_id}"}},
@@ -388,6 +387,12 @@ class SascatalogSource(Source):
             )
             print(resp.text)
         """
+        rows, cols = self.sasCatalog_client.get_rows_cols(table_resource_id)
+        table_data = {"columns": cols, "rows": rows}
+        self.metadata.client.put(
+            path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/sampleData",
+            data=json.dumps(table_data),
+        )
         self.metadata.client.put(
             path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/tableProfile",
             data=table_profile_request.json(),
@@ -403,6 +408,11 @@ class SascatalogSource(Source):
 
     def update_table_custom_attributes(self):
         pass
+
+    def create_sample_data(self, table_id):
+        rows_source, col_names = self.sasCatalog_client.get_rows_cols(table_id)
+        rows = list(map(lambda x: x["cells"], rows_source))
+        return TableData(columns=col_names, rows=rows)
 
     def close(self):
         pass

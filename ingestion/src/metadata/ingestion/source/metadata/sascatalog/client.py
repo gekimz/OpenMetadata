@@ -36,7 +36,7 @@ class SASCatalogClient:
         sas_table_id = "02b7102c-e997-465d-9f41-2491c3a4f05b"
         extra_f = "contains(resourceId, 'dataTables')"
         filter_state = f"filter=and(or(eq(definitionId,'{cas_table_id}'),eq(definitionId,'{sas_table_id}')),{extra_f})"
-        endpoint = f"catalog/instances?{filter_state}&limit=1"
+        endpoint = f"catalog/instances?{filter_state}"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
@@ -78,28 +78,39 @@ class SASCatalogClient:
             raise APIError(response["error"])
         return response
 
-    def get_rows(self, endpoint):
+    def get_rows_cols(self, endpoint):
         # Retrieve resouceId attribute of table instance
         data_table = self.client.get(endpoint)
         if "error" in data_table.keys():
             raise APIError(data_table["error"])
         links = data_table["links"]
         rows_uri = None
+        cols_uri = None
         load_uri = None
         for link in links:
-            if rows_uri and load_uri:
+            if rows_uri and load_uri and cols_uri:
                 break
             if link["rel"] == "rows":
                 rows_uri = link["uri"][1:]
             if link["rel"] == "load":
                 load_uri = link["uri"][1:]
+            if link["rel"] == "columns":
+                cols_uri = link["uri"][1:]
         if load_uri:
             headers = {"Content-type": "text/plain"}
-            # self.client._request("PUT", path=load_uri, headers=headers)
-        rows = self.client.get(rows_uri)
-        if "error" in rows.keys():
-            raise APIError(data_table["error"])
-        return rows
+            self.client._request("PUT", path=load_uri, headers=headers)
+        rows_resp = self.client.get(rows_uri)
+        if "error" in rows_resp.keys():
+            raise APIError(rows_resp["error"])
+        rows_source = rows_resp["items"]
+        rows = list(map(lambda x: x["cells"], rows_source))
+        cols_resp = self.client.get(cols_uri)
+        if "error" in cols_resp.keys():
+            raise APIError(cols_resp["error"])
+        cols = cols_resp["items"]
+        col_names = list(map(lambda x: x["name"], cols))
+        col_names_proper = list(map(lambda x: x.replace('"', "'"), col_names))
+        return rows, col_names_proper
 
     def get_auth_token(self):
         return self.auth_token, 0
