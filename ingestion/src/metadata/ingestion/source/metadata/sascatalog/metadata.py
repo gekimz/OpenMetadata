@@ -9,6 +9,9 @@ from metadata.generated.schema.api.data.createDatabaseSchema import (
     CreateDatabaseSchemaRequest,
 )
 from metadata.generated.schema.api.data.createTable import CreateTableRequest
+from metadata.generated.schema.api.data.createTableProfile import (
+    CreateTableProfileRequest,
+)
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
 )
@@ -17,6 +20,7 @@ from metadata.generated.schema.entity.data.table import (
     ColumnProfile,
     CustomMetricProfile,
     Table,
+    TableProfile,
 )
 from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
     CustomDatabaseConnection,
@@ -204,8 +208,12 @@ class SascatalogSource(Source):
             if "columnCount" not in table_extension
             else table_extension["columnCount"]
         )
+        row_count = (
+            0 if "rowCount" not in table_extension else table_extension["rowCount"]
+        )
         counter = 0
 
+        col_profile_list = []
         # Creating the columns of the table
         for entity in entities:
             if entity["id"] == table_id:
@@ -231,7 +239,7 @@ class SascatalogSource(Source):
                 "min": "min",
                 "max": "max",
                 "standardDeviation": "stddev",
-                "missingCount": "missingCount",
+                "missingCount": "nullCount",
                 "completenessPercent": "valuesPercentage",
                 "uniquenessPercent": "uniqueProportion",
                 "cardinalityCount": "distinctCount",
@@ -239,10 +247,10 @@ class SascatalogSource(Source):
                 "quantiles25": "firstQuartile",
                 "quantiles50": "median",
                 "quantiles75": "thirdQuartile",
-                "blankValueCount": "nullCount",
+                "mismatchedCount": "missingCount",
                 "charsMinCount": "minLength",
                 "charsMaxCount": "maxLength",
-                "rawLength": "valuesCount",
+                # "rawLength": "valuesCount",
             }
             extra_metrics = [
                 "nOutliers",
@@ -262,7 +270,21 @@ class SascatalogSource(Source):
             col_profile_dict = dict()
             for attr in attr_map:
                 if attr in col_attributes:
-                    col_profile_dict[attr_map[attr]] = col_attributes[attr]
+                    if attr == "uniquenessPercent":
+                        col_profile_dict[attr_map[attr]] = col_attributes[attr] / 100
+                    else:
+                        col_profile_dict[attr_map[attr]] = col_attributes[attr]
+
+            if "rowCount" in table_extension:
+                col_profile_dict["valuesCount"] = table_extension["rowCount"]
+            if (
+                "distinctCount" in col_profile_dict
+                and "valuesCount" in col_profile_dict
+            ):
+                col_profile_dict["distinctProportion"] = (
+                    col_profile_dict["distinctCount"] / col_profile_dict["valuesCount"]
+                )
+
             custom_metrics_list: List[CustomMetricProfile] = []
             for metric in extra_metrics:
                 if metric in col_attributes:
@@ -278,6 +300,7 @@ class SascatalogSource(Source):
             col_profile_dict["timestamp"] = timestamp
             col_profile_dict["name"] = parsed_string["name"]
             column_profile = ColumnProfile(**col_profile_dict)
+            col_profile_list.append(column_profile)
             parsed_string["profile"] = column_profile
 
             if datatype in ["char", "varchar", "binary", "varbinary"]:
@@ -309,6 +332,16 @@ class SascatalogSource(Source):
 
         yield table_request
 
+        table_profile_dict = dict()
+        timestamp = time.time() * 1000
+        table_profile_dict["timestamp"] = timestamp
+        table_profile_dict["rowCount"] = row_count
+        table_profile_dict["columnCount"] = col_count
+        table_profile = TableProfile(**table_profile_dict)
+        table_profile_request = CreateTableProfileRequest(
+            tableProfile=table_profile, columnProfile=col_profile_list
+        )
+
         table_fqn = fqn.build(
             self.metadata,
             entity_type=Table,
@@ -330,6 +363,17 @@ class SascatalogSource(Source):
         patch = [{"op": "add", "path": "/extension", "value": table_extension}]
         self.metadata.client.patch(
             path=f"/tables/{table_entity.id.__root__}", data=json.dumps(patch)
+        )
+        """
+        for column in table_entity.columns:
+            resp = self.metadata.client.get(
+                path=f"/tables/{table_fqn}.{column.name.__root__}/tableProfile"
+            )
+            print(resp.text)
+        """
+        self.metadata.client.put(
+            path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/tableProfile",
+            data=table_profile_request.json(),
         )
 
     def add_table_custom_attributes(self):
