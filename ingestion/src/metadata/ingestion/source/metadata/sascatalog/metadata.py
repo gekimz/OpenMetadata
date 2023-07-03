@@ -55,6 +55,11 @@ from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClien
 from metadata.ingestion.source.metadata.sascatalog.extension_attr import (
     TABLE_CUSTOM_ATTR,
 )
+from metadata.profiler.api.models import ProfilerResponse
+from metadata.profiler.sink.metadata_rest import (
+    MetadataRestSink,
+    MetadataRestSinkConfig,
+)
 from metadata.utils import fqn
 from metadata.utils.logger import ingestion_logger
 
@@ -312,7 +317,7 @@ class SascatalogSource(Source):
                         )
                         custom_metrics_list.append(custom_metrics)
             col_profile_dict["customMetricsProfile"] = custom_metrics_list
-            timestamp = time.time() * 1000
+            timestamp = time.time()
             col_profile_dict["timestamp"] = timestamp
             col_profile_dict["name"] = parsed_string["name"]
             column_profile = ColumnProfile(**col_profile_dict)
@@ -349,7 +354,7 @@ class SascatalogSource(Source):
         yield table_request
 
         table_profile_dict = dict()
-        timestamp = time.time() * 1000
+        timestamp = time.time()
         table_profile_dict["timestamp"] = timestamp
         table_profile_dict["rowCount"] = row_count
         table_profile_dict["columnCount"] = col_count
@@ -397,6 +402,16 @@ class SascatalogSource(Source):
             path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/tableProfile",
             data=table_profile_request.json(),
         )
+
+        # Building Profiler Response
+        table_sample_data = TableData(columns=cols, rows=rows)
+        table_profile = ProfilerResponse(
+            table=table_entity,
+            profile=table_profile_request,
+            sample_data=table_sample_data,
+        )
+        sink = MetadataRestSink(MetadataRestSinkConfig(), self.metadata_config)
+        sink.write_record(table_profile)
 
     def add_table_custom_attributes(self):
         table_type = self.metadata.client.get(path="/metadata/types/name/table")
