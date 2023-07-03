@@ -36,7 +36,7 @@ class SASCatalogClient:
         sas_table_id = "02b7102c-e997-465d-9f41-2491c3a4f05b"
         extra_f = "contains(resourceId, 'dataTables')"
         filter_state = f"filter=and(or(eq(definitionId,'{cas_table_id}'),eq(definitionId,'{sas_table_id}')),{extra_f})"
-        endpoint = f"catalog/instances?{filter_state}"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
@@ -52,6 +52,15 @@ class SASCatalogClient:
         if "error" in response.keys():
             raise APIError(response["error"])
         return response
+
+    def list_reports(self):
+        report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
+        filter_state = f"filter=eq(definitionId,{report_id}"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
+        response = self.client.get(endpoint)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        return response["items"]
 
     def get_views(self, query):
         endpoint = "catalog/instances"
