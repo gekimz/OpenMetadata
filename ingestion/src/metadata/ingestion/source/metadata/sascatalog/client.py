@@ -62,6 +62,12 @@ class SASCatalogClient:
             raise APIError(response["error"])
         return response["items"]
 
+    def get_report(self, reportId):
+        endpoint = f"reports/reports/{reportId}"
+        response = self.client.get(endpoint)
+        if "error" in response.keys():
+            return response
+
     def get_views(self, query):
         endpoint = "catalog/instances"
         headers = {

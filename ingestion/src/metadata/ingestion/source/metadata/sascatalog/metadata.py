@@ -15,6 +15,9 @@ from metadata.generated.schema.api.data.createTableProfile import (
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
 )
+from metadata.generated.schema.api.services.createMetadataService import (
+    CreateMetadataServiceRequest,
+)
 from metadata.generated.schema.entity.data.table import (
     Column,
     ColumnProfile,
@@ -42,6 +45,7 @@ from metadata.generated.schema.entity.services.databaseService import (
     DatabaseService,
     DatabaseServiceType,
 )
+from metadata.generated.schema.entity.services.metadataService import MetadataService
 from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
 )
@@ -109,6 +113,10 @@ class SascatalogSource(Source):
         table_entities = self.sasCatalog_client.list_instances()
         for table in table_entities:
             yield from self.create_table_entity(table)
+        report_entities = self.sasCatalog_client.list_reports()
+        for report in report_entities:
+            # There isn't a schema for creating report entities, maybe this'll work instead
+            yield from self.create_report_entity(report)
 
     def create_database_service(self, service_name):
         # I should also probably add some functionality to check if a db_service, db, db_schema already exist
@@ -403,6 +411,7 @@ class SascatalogSource(Source):
             data=table_profile_request.json(),
         )
 
+        """
         # Building Profiler Response
         table_sample_data = TableData(columns=cols, rows=rows)
         table_profile = ProfilerResponse(
@@ -411,7 +420,7 @@ class SascatalogSource(Source):
             sample_data=table_sample_data,
         )
         sink = MetadataRestSink(MetadataRestSinkConfig(), self.metadata_config)
-        sink.write_record(table_profile)
+        sink.write_record(table_profile) """
 
     def add_table_custom_attributes(self):
         table_type = self.metadata.client.get(path="/metadata/types/name/table")
@@ -428,6 +437,26 @@ class SascatalogSource(Source):
         rows_source, col_names = self.sasCatalog_client.get_rows_cols(table_id)
         rows = list(map(lambda x: x["cells"], rows_source))
         return TableData(columns=col_names, rows=rows)
+
+    def create_report_entity(self, report):
+        report_id = report["id"]
+        report_instance = self.sasCatalog_client.get_instance(report_id)
+        metadata_service_request = CreateMetadataServiceRequest(
+            name=self.config.serviceName,
+            serviceType=self.config.type,
+            connection=self.config.serviceConnection,
+        )
+        yield metadata_service_request
+        metadata_service_entity = self.metadata.get_entity_reference(
+            MetadataService, self.config.serviceName
+        )
+        data = {
+            "id": report_id,
+            "name": report_instance["name"],
+            "service": metadata_service_entity,
+        }
+        self.metadata.client.put(path="/reports", data=json.dumps(data))
+        logger.info(f"Successfully ingested report {report_id}")
 
     def close(self):
         pass
