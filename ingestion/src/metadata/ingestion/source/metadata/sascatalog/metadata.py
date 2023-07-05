@@ -39,13 +39,18 @@ from metadata.generated.schema.entity.services.connections.metadata.openMetadata
 )
 from metadata.generated.schema.entity.services.connections.metadata.sasCatalogConnection import (
     SASCatalogConnection,
+    SasCatalogType,
 )
 from metadata.generated.schema.entity.services.databaseService import (
     DatabaseConnection,
     DatabaseService,
     DatabaseServiceType,
 )
-from metadata.generated.schema.entity.services.metadataService import MetadataService
+from metadata.generated.schema.entity.services.metadataService import (
+    MetadataConnection,
+    MetadataService,
+    MetadataServiceType,
+)
 from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
 )
@@ -111,12 +116,14 @@ class SascatalogSource(Source):
 
     def next_record(self):
         table_entities = self.sasCatalog_client.list_instances()
-        for table in table_entities:
-            yield from self.create_table_entity(table)
+        # for table in table_entities:
+        #    yield from self.create_table_entity(table)
+        #'''
         report_entities = self.sasCatalog_client.list_reports()
         for report in report_entities:
             # There isn't a schema for creating report entities, maybe this'll work instead
             yield from self.create_report_entity(report)
+        #'''
 
     def create_database_service(self, service_name):
         # I should also probably add some functionality to check if a db_service, db, db_schema already exist
@@ -441,20 +448,33 @@ class SascatalogSource(Source):
     def create_report_entity(self, report):
         report_id = report["id"]
         report_instance = self.sasCatalog_client.get_instance(report_id)
-        metadata_service_request = CreateMetadataServiceRequest(
-            name=self.config.serviceName,
-            serviceType=self.config.type,
-            connection=self.config.serviceConnection,
+        logger.info(f"{self.config.type}")
+        logger.info(f"{self.service_connection}")
+        metadata_service_request = CreateDatabaseServiceRequest(
+            name="reports",
+            serviceType=DatabaseServiceType.CustomDatabase,
+            connection=DatabaseConnection(
+                config=CustomDatabaseConnection(
+                    type=CustomDatabaseType.CustomDatabase,
+                    sourcePythonClass="metadata.ingestion.source.database.customdatabase.metadata.SASCatalogDB",
+                )
+            ),
         )
         yield metadata_service_request
+
         metadata_service_entity = self.metadata.get_entity_reference(
-            MetadataService, self.config.serviceName
+            DatabaseService, "reports"
         )
+        service_ref = dict(metadata_service_entity)
+        print(service_ref["id"])
+        service_ref["id"] = str(service_ref["id"].__root__)
+        service_ref["href"] = str(service_ref["href"].__root__)
         data = {
             "id": report_id,
             "name": report_instance["name"],
-            "service": metadata_service_entity,
+            "service": service_ref,
         }
+        print(service_ref)
         self.metadata.client.put(path="/reports", data=json.dumps(data))
         logger.info(f"Successfully ingested report {report_id}")
 
