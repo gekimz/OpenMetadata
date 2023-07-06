@@ -132,6 +132,17 @@ class SASCatalogClient:
         endpoint = f"/links/resources/report?uri={revised_uri}"
         return self.config.serverHost + endpoint
 
+    def get_report_relationship(self, report_id):
+        endpoint = f"reports/commons/relationships/reports/{report_id}"
+        response = self.client.get(endpoint)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        dependencies = []
+        for item in response["items"]:
+            if item["type"] == "Dependent":
+                dependencies.append(item)
+        return dependencies
+
     def get_auth_token(self):
         return self.auth_token, 0
 
