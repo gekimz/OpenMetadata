@@ -143,6 +143,18 @@ class SASCatalogClient:
                 dependencies.append(item)
         return dependencies
 
+    def get_resource(self, endpoint):
+        response = self.client.get(endpoint)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        return response["items"]
+
+    def get_instances_with_param(self, data):
+        endpoint = f"catalog/instances?{data}"
+        response = self.client.get(endpoint)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+
     def get_auth_token(self):
         return self.auth_token, 0
 

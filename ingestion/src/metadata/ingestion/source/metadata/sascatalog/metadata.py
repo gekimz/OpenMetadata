@@ -126,13 +126,13 @@ class SascatalogSource(Source):
 
     def next_record(self):
         table_entities = self.sasCatalog_client.list_instances()
-        for table in table_entities:
-            yield from self.create_table_entity(table)
+        # for table in table_entities:
+        #    yield from self.create_table_entity(table)
         #'''
         report_entities = self.sasCatalog_client.list_reports()
-        # for report in report_entities:
-        # There isn't a schema for creating report entities, maybe this'll work instead
-        #    yield from self.create_report_entity(report)
+        for report in report_entities:
+            # There isn't a schema for creating report entities, maybe this'll work instead
+            yield from self.create_report_entity(report)
         #'''
 
     def create_database_service(self, service_name):
@@ -472,6 +472,20 @@ class SascatalogSource(Source):
             dashboard_service_request
         )
         return dashboard_service_entity
+
+    def get_report_tables(self, report_id):
+        report_tables = self.sasCatalog_client.get_report_relationship(report_id)
+        table_entities = []
+        for table in report_tables:
+            table_uri = table["relatedResourceUri"][1:]
+            table_resource = self.sasCatalog_client.get_resource(table_uri)
+            table_name = table_resource["name"]
+            table_data_resource = table_resource["tableReference"]["tableUri"]
+            param = f"filter=and(eq(name, '{table_name}'),eq(resourceId,'{table_data_resource}'))"
+            table_instance = self.sasCatalog_client.get_instances_with_param(param)[0]
+            table_entity = self.create_table_entity(table_instance)
+            table_entities.append(table_entity)
+        return table_entities
 
     def create_report_entity(self, report):
         report_id = report["id"]
