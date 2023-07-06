@@ -5,6 +5,7 @@ from typing import List
 import jsonpatch
 
 from metadata.generated.schema.api.data.createChart import CreateChartRequest
+from metadata.generated.schema.api.data.createDashboard import CreateDashboardRequest
 from metadata.generated.schema.api.data.createDatabase import CreateDatabaseRequest
 from metadata.generated.schema.api.data.createDatabaseSchema import (
     CreateDatabaseSchemaRequest,
@@ -27,7 +28,7 @@ from metadata.generated.schema.entity.data.table import (
     TableData,
     TableProfile,
 )
-from metadata.generated.schema.entity.services.connection.dashboard.customDashboardConnection import (
+from metadata.generated.schema.entity.services.connections.dashboard.customDashboardConnection import (
     CustomDashboardConnection,
     CustomDashboardType,
 )
@@ -125,13 +126,13 @@ class SascatalogSource(Source):
 
     def next_record(self):
         table_entities = self.sasCatalog_client.list_instances()
-        # for table in table_entities:
-        #    yield from self.create_table_entity(table)
+        for table in table_entities:
+            yield from self.create_table_entity(table)
         #'''
         report_entities = self.sasCatalog_client.list_reports()
-        for report in report_entities:
-            # There isn't a schema for creating report entities, maybe this'll work instead
-            yield from self.create_report_entity(report)
+        # for report in report_entities:
+        # There isn't a schema for creating report entities, maybe this'll work instead
+        #    yield from self.create_report_entity(report)
         #'''
 
     def create_database_service(self, service_name):
@@ -316,6 +317,7 @@ class SascatalogSource(Source):
                         col_profile_dict["distinctCount"]
                         / col_profile_dict["valuesCount"]
                     )
+                    col_profile_dict["uniqueCount"] = col_profile_dict["distinctCount"]
                 if "nullCount" in col_profile_dict:
                     col_profile_dict["nullProportion"] = (
                         col_profile_dict["nullCount"] / col_profile_dict["valuesCount"]
@@ -455,7 +457,7 @@ class SascatalogSource(Source):
         return TableData(columns=col_names, rows=rows)
 
     def create_dashboard_service(self):
-        dashboard_service_name = "reports"
+        dashboard_service_name = "SAS_reports"
         dashboard_service_request = CreateDashboardServiceRequest(
             name=dashboard_service_name,
             serviceType=DashboardServiceType.CustomDashboard,
@@ -477,46 +479,15 @@ class SascatalogSource(Source):
         logger.info(f"{self.config.type}")
         logger.info(f"{self.service_connection}")
         dashboard_service = self.create_dashboard_service()
-        report_resource = None
-        for link in report_instance["links"]:
-            if link["rel"] == "resource":
-                report_resource = link["uri"]
+        report_resource = report_instance["resourceId"]
         report_url = self.sasCatalog_client.get_report_link(report_resource)
-        report_request = CreateChartRequest(
+        report_request = CreateDashboardRequest(
             name=report_id,
             displayName=report_instance["name"],
-            chartUrl=report_url,
+            dashboardUrl=report_url,
             service=dashboard_service.fullyQualifiedName,
         )
         yield report_request
-
-        # metadata_service_request = CreateDatabaseServiceRequest(
-        #     name="reports",
-        #     serviceType=DatabaseServiceType.CustomDatabase,
-        #     connection=DatabaseConnection(
-        #         config=CustomDatabaseConnection(
-        #             type=CustomDatabaseType.CustomDatabase,
-        #             sourcePythonClass="metadata.ingestion.source.database.customdatabase.metadata.SASCatalogDB",
-        #         )
-        #     ),
-        # )
-        # yield metadata_service_request
-        #
-        # metadata_service_entity = self.metadata.get_entity_reference(
-        #     DatabaseService, "reports"
-        # )
-        # service_ref = dict(metadata_service_entity)
-        # print(service_ref["id"])
-        # service_ref["id"] = str(service_ref["id"].__root__)
-        # service_ref["href"] = str(service_ref["href"].__root__)
-        # data = {
-        #     "id": report_id,
-        #     "name": report_instance["name"],
-        #     "service": service_ref,
-        # }
-        # print(service_ref)
-        # self.metadata.client.put(path="/reports", data=json.dumps(data))
-        # logger.info(f"Successfully ingested report {report_id}")
 
     def close(self):
         pass
