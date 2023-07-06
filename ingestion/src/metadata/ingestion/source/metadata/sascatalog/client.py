@@ -127,6 +127,10 @@ class SASCatalogClient:
         col_names_proper = list(map(lambda x: x.replace('"', "'"), col_names))
         return rows, col_names_proper
 
+    def get_report_link(self, uri):
+        endpoint = f"/links/resources/report?uri={uri}"
+        return self.config.serverHost + endpoint
+
     def get_auth_token(self):
         return self.auth_token, 0
 

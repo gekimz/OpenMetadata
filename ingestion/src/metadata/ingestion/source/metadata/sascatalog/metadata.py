@@ -4,6 +4,7 @@ from typing import List
 
 import jsonpatch
 
+from metadata.generated.schema.api.data.createChart import CreateChartRequest
 from metadata.generated.schema.api.data.createDatabase import CreateDatabaseRequest
 from metadata.generated.schema.api.data.createDatabaseSchema import (
     CreateDatabaseSchemaRequest,
@@ -475,6 +476,20 @@ class SascatalogSource(Source):
         report_instance = self.sasCatalog_client.get_instance(report_id)
         logger.info(f"{self.config.type}")
         logger.info(f"{self.service_connection}")
+        dashboard_service = self.create_dashboard_service()
+        report_resource = None
+        for link in report_instance["links"]:
+            if link["rel"] == "resource":
+                report_resource = link["uri"]
+        report_url = self.sasCatalog_client.get_report_link(report_resource)
+        report_request = CreateChartRequest(
+            name=report_id,
+            displayName=report_instance["name"],
+            chartUrl=report_url,
+            service=dashboard_service.fullyQualifiedName,
+        )
+        yield report_request
+
         # metadata_service_request = CreateDatabaseServiceRequest(
         #     name="reports",
         #     serviceType=DatabaseServiceType.CustomDatabase,
