@@ -12,11 +12,11 @@ from metadata.generated.schema.api.data.createTable import CreateTableRequest
 from metadata.generated.schema.api.data.createTableProfile import (
     CreateTableProfileRequest,
 )
+from metadata.generated.schema.api.services.createDashboardService import (
+    CreateDashboardServiceRequest,
+)
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
-)
-from metadata.generated.schema.api.services.createMetadataService import (
-    CreateMetadataServiceRequest,
 )
 from metadata.generated.schema.entity.data.table import (
     Column,
@@ -25,6 +25,10 @@ from metadata.generated.schema.entity.data.table import (
     Table,
     TableData,
     TableProfile,
+)
+from metadata.generated.schema.entity.services.connection.dashboard.customDashboardConnection import (
+    CustomDashboardConnection,
+    CustomDashboardType,
 )
 from metadata.generated.schema.entity.services.connections.database.customDatabaseConnection import (
     CustomDatabaseConnection,
@@ -40,6 +44,10 @@ from metadata.generated.schema.entity.services.connections.metadata.openMetadata
 from metadata.generated.schema.entity.services.connections.metadata.sasCatalogConnection import (
     SASCatalogConnection,
     SasCatalogType,
+)
+from metadata.generated.schema.entity.services.dashboardService import (
+    DashboardConnection,
+    DashboardServiceType,
 )
 from metadata.generated.schema.entity.services.databaseService import (
     DatabaseConnection,
@@ -445,38 +453,55 @@ class SascatalogSource(Source):
         rows = list(map(lambda x: x["cells"], rows_source))
         return TableData(columns=col_names, rows=rows)
 
+    def create_dashboard_service(self):
+        dashboard_service_name = "reports"
+        dashboard_service_request = CreateDashboardServiceRequest(
+            name=dashboard_service_name,
+            serviceType=DashboardServiceType.CustomDashboard,
+            connection=DashboardConnection(
+                config=CustomDashboardConnection(
+                    type=CustomDashboardType.CustomDashboard,
+                    sourcePythonClass="metadata.ingestion.source.database.customdatabase.metadata.SASCatalogDB",
+                )
+            ),
+        )
+        dashboard_service_entity = self.metadata.create_or_update(
+            dashboard_service_request
+        )
+        return dashboard_service_entity
+
     def create_report_entity(self, report):
         report_id = report["id"]
         report_instance = self.sasCatalog_client.get_instance(report_id)
         logger.info(f"{self.config.type}")
         logger.info(f"{self.service_connection}")
-        metadata_service_request = CreateDatabaseServiceRequest(
-            name="reports",
-            serviceType=DatabaseServiceType.CustomDatabase,
-            connection=DatabaseConnection(
-                config=CustomDatabaseConnection(
-                    type=CustomDatabaseType.CustomDatabase,
-                    sourcePythonClass="metadata.ingestion.source.database.customdatabase.metadata.SASCatalogDB",
-                )
-            ),
-        )
-        yield metadata_service_request
-
-        metadata_service_entity = self.metadata.get_entity_reference(
-            DatabaseService, "reports"
-        )
-        service_ref = dict(metadata_service_entity)
-        print(service_ref["id"])
-        service_ref["id"] = str(service_ref["id"].__root__)
-        service_ref["href"] = str(service_ref["href"].__root__)
-        data = {
-            "id": report_id,
-            "name": report_instance["name"],
-            "service": service_ref,
-        }
-        print(service_ref)
-        self.metadata.client.put(path="/reports", data=json.dumps(data))
-        logger.info(f"Successfully ingested report {report_id}")
+        # metadata_service_request = CreateDatabaseServiceRequest(
+        #     name="reports",
+        #     serviceType=DatabaseServiceType.CustomDatabase,
+        #     connection=DatabaseConnection(
+        #         config=CustomDatabaseConnection(
+        #             type=CustomDatabaseType.CustomDatabase,
+        #             sourcePythonClass="metadata.ingestion.source.database.customdatabase.metadata.SASCatalogDB",
+        #         )
+        #     ),
+        # )
+        # yield metadata_service_request
+        #
+        # metadata_service_entity = self.metadata.get_entity_reference(
+        #     DatabaseService, "reports"
+        # )
+        # service_ref = dict(metadata_service_entity)
+        # print(service_ref["id"])
+        # service_ref["id"] = str(service_ref["id"].__root__)
+        # service_ref["href"] = str(service_ref["href"].__root__)
+        # data = {
+        #     "id": report_id,
+        #     "name": report_instance["name"],
+        #     "service": service_ref,
+        # }
+        # print(service_ref)
+        # self.metadata.client.put(path="/reports", data=json.dumps(data))
+        # logger.info(f"Successfully ingested report {report_id}")
 
     def close(self):
         pass
