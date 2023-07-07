@@ -156,6 +156,14 @@ class SASCatalogClient:
             raise APIError(response["error"])
         return response["items"]
 
+    def get_visual_elements(self, report_id):
+        endpoint = f"reports/reports/{report_id}/content"
+        headers = {"Accept": "application/vnd.sas.report.content+json"}
+        response = self.client._request("GET", path=endpoint, headers=headers)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        return response["visualElements"]
+
     def get_auth_token(self):
         return self.auth_token, 0
 
