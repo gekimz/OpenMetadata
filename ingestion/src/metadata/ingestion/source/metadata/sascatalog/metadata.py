@@ -111,7 +111,7 @@ class SascatalogSource(Source):
         self.db_service_name = None
         self.db_name = None
         self.db_schema_name = None
-        self.table_fqn = None
+        self.table_fqns = None
 
         self.dashboard_service_name = None
 
@@ -138,7 +138,17 @@ class SascatalogSource(Source):
         #'''
         report_entities = self.sasCatalog_client.list_reports()
         for report in report_entities:
+            self.table_fqns = []
             # There isn't a schema for creating report entities, maybe this'll work instead
+            report_id = report["id"]
+            report_instance = self.sasCatalog_client.get_instance(report_id)
+            report_resource = report_instance["resourceId"]
+            report_resource_id = self.sasCatalog_client.get_resource(
+                report_resource[1:]
+            )["id"]
+            report_tables = self.get_report_tables(report_resource_id)
+            for table in report_tables:
+                yield from self.create_table_entity(table)
             yield from self.create_report_entity(report)
         #'''
 
@@ -170,19 +180,36 @@ class SascatalogSource(Source):
         # We find the name of the mock DB service
         # Use the link to the parent of the resourceId of the datastore itself, and use its name
         # Then the db service name will be the provider id
-        data_store_endpoint = db["resourceId"][1:]
-        logger.info(f"{data_store_endpoint}")
-        data_store_resource = self.sasCatalog_client.get_data_source(
-            data_store_endpoint
-        )
-        db_service = self.create_database_service(data_store_resource["providerId"])
-
+        # data_store_endpoint = db["resourceId"][1:]
+        # logger.info(f"{data_store_endpoint}")
+        # data_store_resource = self.sasCatalog_client.get_data_source(
+        #     data_store_endpoint
+        # )
+        # db_service = self.create_database_service(data_store_resource["providerId"])
+        #
+        # data_store_parent_endpoint = ""
+        # for link in data_store_resource["links"]:
+        #     if link["rel"] == "parent":
+        #         data_store_parent_endpoint = link["uri"][1:]
+        #         break
+        #
+        # data_store_parent = self.sasCatalog_client.get_data_source(
+        #     data_store_parent_endpoint
+        # )
+        # self.db_name = data_store_parent["id"]
+        # database = CreateDatabaseRequest(
+        #     name=data_store_parent["id"],
+        #     displayName=data_store_parent["name"],
+        #     service=db_service.fullyQualifiedName,
+        # )
+        # database_entity = self.metadata.create_or_update(data=database)
+        # return database_entity
+        db_service = self.create_database_service(db["providerId"])
         data_store_parent_endpoint = ""
-        for link in data_store_resource["links"]:
+        for link in db["links"]:
             if link["rel"] == "parent":
                 data_store_parent_endpoint = link["uri"][1:]
                 break
-
         data_store_parent = self.sasCatalog_client.get_data_source(
             data_store_parent_endpoint
         )
@@ -200,20 +227,35 @@ class SascatalogSource(Source):
         # We find the "database" entity in catalog
         # We first see if the table is a member of the library through the relationships attribute
         # Or we could use views to query the dataStores
-        data_store_data_sets = "4b114f6e-1c2a-4060-9184-6809a612f27b"
-        data_store_id = None
-        for relation in table_detail["relationships"]:
-            if relation["definitionId"] != data_store_data_sets:
-                continue
-            data_store_id = relation["endpointId"]
-            break
-
-        if data_store_id is None:
-            # For now we'll print error since we are exclusively working with tables in dataTables
-            logger.error("Data store id should not be none")
-            return None
-
-        data_store = self.sasCatalog_client.get_instance(data_store_id)
+        # data_store_data_sets = "4b114f6e-1c2a-4060-9184-6809a612f27b"
+        # data_store_id = None
+        # for relation in table_detail["relationships"]:
+        #     if relation["definitionId"] != data_store_data_sets:
+        #         continue
+        #     data_store_id = relation["endpointId"]
+        #     break
+        #
+        # if data_store_id is None:
+        #     # For now we'll print error since we are exclusively working with tables in dataTables
+        #     logger.error("Data store id should not be none")
+        #     return None
+        #
+        # data_store = self.sasCatalog_client.get_instance(data_store_id)
+        # database = self.create_database(data_store)
+        # self.db_schema_name = data_store["name"]
+        # db_schema = CreateDatabaseSchemaRequest(
+        #     name=data_store["name"], database=database.fullyQualifiedName
+        # )
+        # db_schema_entity = self.metadata.create_or_update(db_schema)
+        # return db_schema_entity
+        table_resource_endpoint = table_detail["resourceId"][1:]
+        table_resource = self.sasCatalog_client.get_resource(table_resource_endpoint)
+        data_store_endpoint = ""
+        for link in table_resource["links"]:
+            if link["rel"] == "dataSource":
+                data_store_endpoint = link["uri"][1:]
+                break
+        data_store = self.sasCatalog_client.get_data_source(data_store_endpoint)
         database = self.create_database(data_store)
         self.db_schema_name = data_store["name"]
         db_schema = CreateDatabaseSchemaRequest(
@@ -405,7 +447,7 @@ class SascatalogSource(Source):
             table_name=table_id,
         )
 
-        self.table_fqn = table_fqn
+        self.table_fqns.append(table_fqn)
         table_entity = self.metadata.get_by_name(entity=Table, fqn=table_fqn)
         patches = []
         for attr in table_extension:
@@ -484,7 +526,7 @@ class SascatalogSource(Source):
 
     def get_report_tables(self, report_id):
         report_tables = self.sasCatalog_client.get_report_relationship(report_id)
-        table_entities = []
+        table_instances = []
         for table in report_tables:
             table_uri = table["relatedResourceUri"][1:]
             table_resource = self.sasCatalog_client.get_resource(table_uri)
@@ -492,10 +534,24 @@ class SascatalogSource(Source):
             table_data_resource = table_resource["tableReference"]["tableUri"]
             param = f"filter=and(eq(name, '{table_name}'),eq(resourceId,'{table_data_resource}'))"
             table_instance = self.sasCatalog_client.get_instances_with_param(param)[0]
-            self.create_table_entity(table_instance)
-            table_entity = self.metadata.get_by_name(entity=Table, fqn=self.table_fqn)
-            table_entities.append(table_entity)
-        return table_entities
+            table_instances.append(table_instance)
+        return table_instances
+
+        #     yield from self.create_table_entity(table_instance)
+        #     table_entity = self.metadata.get_by_name(entity=Table, fqn=self.table_fqn)
+        #     table_entities.append(table_entity)
+        # return table_entities
+
+    def create_lineage_request(self, dashboard, table_entities):
+        for table in table_entities:
+            return AddLineageRequest(
+                edge=EntitiesEdge(
+                    fromEntity=EntityReference(id=table.id.__root__, type="table"),
+                    toEntity=EntityReference(
+                        id=dashboard.id.__root__, type="dashboard"
+                    ),
+                )
+            )
 
     def create_report_entity(self, report):
         report_id = report["id"]
@@ -514,24 +570,20 @@ class SascatalogSource(Source):
         yield report_request
 
         dashboard_fqn = fqn.build(
+            self.metadata,
             entity_type=Dashboard,
             service_name=self.dashboard_service_name,
             dashboard_name=report_id,
         )
-        dashboard_entity = self.metadata.get_by_name(dashboard_fqn)
-        table_entities = self.get_report_tables(report_id)
-        yield create_lineage_entity(dashboard_entity, table_entities)
 
-    def create_lineage_entity(self, dashboard, table_entities):
-        for table in table_entities:
-            return AddLineageRequest(
-                edge=EntitiesEdge(
-                    fromEntity=EntityReference(id=table.id.__root__, type="table"),
-                    toEntity=EntityReference(
-                        id=dashboard.id.__root__, type="dashboard"
-                    ),
-                )
-            )
+        dashboard_entity = self.metadata.get_by_name(
+            entity=Dashboard, fqn=dashboard_fqn
+        )
+        table_entities = []
+        for table in self.table_fqns:
+            table_entity = self.metadata.get_by_name(entity=Table, fqn=table)
+            table_entities.append(table_entity)
+        yield self.create_lineage_request(dashboard_entity, table_entities)
 
     def close(self):
         pass

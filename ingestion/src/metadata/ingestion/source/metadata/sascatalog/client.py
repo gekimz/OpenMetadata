@@ -63,7 +63,7 @@ class SASCatalogClient:
         return response["items"]
 
     def get_report(self, reportId):
-        endpoint = f"reports/reports/{reportId}"
+        endpoint = f"reports/reports/{reportId}&limit=2"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             return response
@@ -110,7 +110,7 @@ class SASCatalogClient:
             if link["rel"] == "load":
                 load_uri = link["uri"][1:]
             if link["rel"] == "columns":
-                cols_uri = link["uri"][1:]
+                cols_uri = link["uri"][1:] + "?limit=10000"
         if load_uri:
             headers = {"Content-type": "text/plain"}
             self.client._request("PUT", path=load_uri, headers=headers)
@@ -147,13 +147,14 @@ class SASCatalogClient:
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
-        return response["items"]
+        return response
 
     def get_instances_with_param(self, data):
         endpoint = f"catalog/instances?{data}"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
+        return response["items"]
 
     def get_auth_token(self):
         return self.auth_token, 0
