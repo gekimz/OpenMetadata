@@ -14,12 +14,14 @@ from metadata.generated.schema.api.data.createTable import CreateTableRequest
 from metadata.generated.schema.api.data.createTableProfile import (
     CreateTableProfileRequest,
 )
+from metadata.generated.schema.api.lineage.addLineage import AddLineageRequest
 from metadata.generated.schema.api.services.createDashboardService import (
     CreateDashboardServiceRequest,
 )
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
 )
+from metadata.generated.schema.entity.data.dashboard import Dashboard
 from metadata.generated.schema.entity.data.table import (
     Column,
     ColumnProfile,
@@ -65,6 +67,8 @@ from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
 )
 from metadata.generated.schema.type.basic import EntityExtension
+from metadata.generated.schema.type.entityLineage import EntitiesEdge
+from metadata.generated.schema.type.entityReference import EntityReference
 from metadata.ingestion.api.common import Entity
 from metadata.ingestion.api.source import InvalidSourceException, Source
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
@@ -107,6 +111,9 @@ class SascatalogSource(Source):
         self.db_service_name = None
         self.db_name = None
         self.db_schema_name = None
+        self.table_fqn = None
+
+        self.dashboard_service_name = None
 
     # self.add_table_custom_attributes()
 
@@ -398,6 +405,7 @@ class SascatalogSource(Source):
             table_name=table_id,
         )
 
+        self.table_fqn = table_fqn
         table_entity = self.metadata.get_by_name(entity=Table, fqn=table_fqn)
         patches = []
         for attr in table_extension:
@@ -458,6 +466,7 @@ class SascatalogSource(Source):
 
     def create_dashboard_service(self):
         dashboard_service_name = "SAS_reports"
+        self.dashboard_service_name = dashboard_service_name
         dashboard_service_request = CreateDashboardServiceRequest(
             name=dashboard_service_name,
             serviceType=DashboardServiceType.CustomDashboard,
@@ -483,7 +492,8 @@ class SascatalogSource(Source):
             table_data_resource = table_resource["tableReference"]["tableUri"]
             param = f"filter=and(eq(name, '{table_name}'),eq(resourceId,'{table_data_resource}'))"
             table_instance = self.sasCatalog_client.get_instances_with_param(param)[0]
-            table_entity = self.create_table_entity(table_instance)
+            self.create_table_entity(table_instance)
+            table_entity = self.metadata.get_by_name(entity=Table, fqn=self.table_fqn)
             table_entities.append(table_entity)
         return table_entities
 
@@ -502,6 +512,26 @@ class SascatalogSource(Source):
             service=dashboard_service.fullyQualifiedName,
         )
         yield report_request
+
+        dashboard_fqn = fqn.build(
+            entity_type=Dashboard,
+            service_name=self.dashboard_service_name,
+            dashboard_name=report_id,
+        )
+        dashboard_entity = self.metadata.get_by_name(dashboard_fqn)
+        table_entities = self.get_report_tables(report_id)
+        yield create_lineage_entity(dashboard_entity, table_entities)
+
+    def create_lineage_entity(self, dashboard, table_entities):
+        for table in table_entities:
+            return AddLineageRequest(
+                edge=EntitiesEdge(
+                    fromEntity=EntityReference(id=table.id.__root__, type="table"),
+                    toEntity=EntityReference(
+                        id=dashboard.id.__root__, type="dashboard"
+                    ),
+                )
+            )
 
     def close(self):
         pass
