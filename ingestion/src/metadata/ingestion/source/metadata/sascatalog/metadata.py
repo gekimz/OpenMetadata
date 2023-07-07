@@ -21,6 +21,7 @@ from metadata.generated.schema.api.services.createDashboardService import (
 from metadata.generated.schema.api.services.createDatabaseService import (
     CreateDatabaseServiceRequest,
 )
+from metadata.generated.schema.entity.data.chart import Chart, ChartType
 from metadata.generated.schema.entity.data.dashboard import Dashboard
 from metadata.generated.schema.entity.data.table import (
     Column,
@@ -146,10 +147,18 @@ class SascatalogSource(Source):
             report_resource_id = self.sasCatalog_client.get_resource(
                 report_resource[1:]
             )["id"]
+            report_charts = self.sasCatalog_client.get_visual_elements(
+                report_resource_id
+            )
+            supported_chart_types = ["Graph", "Text", "Table"]
+            filtered_charts = filter(lambda x: x["@element"] in supported_chart_types)
+            for chart in filtered_charts:
+                yield from self.create_chart_entity(chart)
             report_tables = self.get_report_tables(report_resource_id)
             for table in report_tables:
                 yield from self.create_table_entity(table)
             yield from self.create_report_entity(report)
+
         #'''
 
     def create_database_service(self, service_name):
@@ -523,6 +532,26 @@ class SascatalogSource(Source):
             dashboard_service_request
         )
         return dashboard_service_entity
+
+    def create_chart_entity(self, chart):
+        chart_type_map = {
+            "Text": ChartType.Text,
+            "Table": ChartType.Table,
+            "timeSeries": ChartType.Line,
+            "Graph": {
+                "bar": ChartType.Bar,
+                "keyValue": ChartType.Table,
+                "pie": ChartType.Pie,
+            },
+        }
+        chart_type = chart_type_map["@element"]
+        chart_request = CreateChartRequest(
+            name=chart["name"],
+            displayName=chart["labelAttribute"],
+            chartType=chart_type,
+            service=self.dashboard_service_name,
+        )
+        yield chart_request
 
     def get_report_tables(self, report_id):
         report_tables = self.sasCatalog_client.get_report_relationship(report_id)
