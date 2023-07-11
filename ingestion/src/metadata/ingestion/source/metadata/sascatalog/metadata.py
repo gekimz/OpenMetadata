@@ -72,6 +72,7 @@ from metadata.generated.schema.type.entityLineage import EntitiesEdge
 from metadata.generated.schema.type.entityReference import EntityReference
 from metadata.ingestion.api.common import Entity
 from metadata.ingestion.api.source import InvalidSourceException, Source
+from metadata.ingestion.ometa.client_utils import get_chart_entities_from_id
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.source.connections import get_connection, get_test_connection_fn
 from metadata.ingestion.source.database.column_type_parser import ColumnTypeParser
@@ -115,6 +116,7 @@ class SascatalogSource(Source):
         self.table_fqns = None
 
         self.dashboard_service_name = None
+        self.chart_names = None
 
     # self.add_table_custom_attributes()
 
@@ -140,6 +142,8 @@ class SascatalogSource(Source):
         report_entities = self.sasCatalog_client.list_reports()
         for report in report_entities:
             self.table_fqns = []
+            self.chart_names = []
+            yield from self.create_dashboard_service()
             # There isn't a schema for creating report entities, maybe this'll work instead
             report_id = report["id"]
             report_instance = self.sasCatalog_client.get_instance(report_id)
@@ -151,7 +155,13 @@ class SascatalogSource(Source):
                 report_resource_id
             )
             supported_chart_types = ["Graph", "Text", "Table"]
-            filtered_charts = filter(lambda x: x["@element"] in supported_chart_types)
+            filtered_charts = list(
+                filter(
+                    lambda x: x["@element"] in supported_chart_types
+                    and "labelAttribute" in x,
+                    report_charts,
+                )
+            )
             for chart in filtered_charts:
                 yield from self.create_chart_entity(chart)
             report_tables = self.get_report_tables(report_resource_id)
@@ -528,29 +538,36 @@ class SascatalogSource(Source):
                 )
             ),
         )
-        dashboard_service_entity = self.metadata.create_or_update(
-            dashboard_service_request
-        )
-        return dashboard_service_entity
+        yield dashboard_service_request
 
     def create_chart_entity(self, chart):
         chart_type_map = {
             "Text": ChartType.Text,
             "Table": ChartType.Table,
-            "timeSeries": ChartType.Line,
             "Graph": {
                 "bar": ChartType.Bar,
                 "keyValue": ChartType.Table,
                 "pie": ChartType.Pie,
+                "timeSeries": ChartType.Line,
             },
         }
-        chart_type = chart_type_map["@element"]
+        if chart["@element"] == "Graph":
+            chart_type = chart_type_map["Graph"][chart["graphType"]]
+        else:
+            chart_type = chart_type_map[chart["@element"]]
         chart_request = CreateChartRequest(
             name=chart["name"],
             displayName=chart["labelAttribute"],
             chartType=chart_type,
             service=self.dashboard_service_name,
         )
+        chart_fqn = fqn.build(
+            self.metadata,
+            entity_type=Chart,
+            chart_name=chart["name"],
+            service_name=self.dashboard_service_name,
+        )
+        self.chart_names.append(chart_fqn)
         yield chart_request
 
     def get_report_tables(self, report_id):
@@ -587,14 +604,14 @@ class SascatalogSource(Source):
         report_instance = self.sasCatalog_client.get_instance(report_id)
         logger.info(f"{self.config.type}")
         logger.info(f"{self.service_connection}")
-        dashboard_service = self.create_dashboard_service()
         report_resource = report_instance["resourceId"]
         report_url = self.sasCatalog_client.get_report_link(report_resource)
         report_request = CreateDashboardRequest(
             name=report_id,
             displayName=report_instance["name"],
             dashboardUrl=report_url,
-            service=dashboard_service.fullyQualifiedName,
+            charts=self.chart_names,
+            service=self.dashboard_service_name,
         )
         yield report_request
 

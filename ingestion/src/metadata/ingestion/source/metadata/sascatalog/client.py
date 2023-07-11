@@ -56,7 +56,7 @@ class SASCatalogClient:
     def list_reports(self):
         report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
         filter_state = f"filter=eq(definitionId,'{report_id}')"
-        endpoint = f"catalog/instances?{filter_state}"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
