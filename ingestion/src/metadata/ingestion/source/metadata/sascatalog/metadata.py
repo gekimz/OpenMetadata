@@ -294,9 +294,14 @@ class SascatalogSource(Source):
 
     def create_columns_alt(self, table):
         columns_endpoint = ""
+        load_endpoint = ""
         for link in table["links"]:
             if link["rel"] == "columns":
                 columns_endpoint = link["uri"][1:] + "?limit=1000"
+            if link["rel"] == "load":
+                load_endpoint = link["uri"][1:]
+        if load_endpoint:
+            self.sasCatalog_client.load_table(load_endpoint)
         columns_resource = self.sasCatalog_client.get_resource(columns_endpoint)
         columns = []
         for item in columns_resource["items"]:
@@ -587,6 +592,7 @@ class SascatalogSource(Source):
                 "keyValue": ChartType.Table,
                 "pie": ChartType.Pie,
                 "timeSeries": ChartType.Line,
+                "wordCloud": ChartType.Text,
             },
         }
         if chart["@element"] == "Graph":

@@ -36,7 +36,7 @@ class SASCatalogClient:
         sas_table_id = "02b7102c-e997-465d-9f41-2491c3a4f05b"
         extra_f = "contains(resourceId, 'dataTables')"
         filter_state = f"filter=and(or(eq(definitionId,'{cas_table_id}'),eq(definitionId,'{sas_table_id}')),{extra_f})"
-        endpoint = f"catalog/instances?{filter_state}"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             raise APIError(response["error"])
@@ -112,8 +112,7 @@ class SASCatalogClient:
             if link["rel"] == "columns":
                 cols_uri = link["uri"][1:] + "?limit=10000"
         if load_uri:
-            headers = {"Content-type": "text/plain"}
-            self.client._request("PUT", path=load_uri, headers=headers)
+            self.load_table(load_uri)
         rows_resp = self.client.get(rows_uri)
         if "error" in rows_resp.keys():
             raise APIError(rows_resp["error"])
@@ -131,6 +130,10 @@ class SASCatalogClient:
         revised_uri = uri.replace("/", "%2F")
         endpoint = f"/links/resources/report?uri={revised_uri}"
         return self.config.serverHost + endpoint
+
+    def load_table(self, endpoint):
+        headers = {"Content-type": "text/plain"}
+        self.client._request("PUT", path=endpoint, headers=headers)
 
     def get_report_relationship(self, report_id):
         endpoint = f"reports/commons/relationships/reports/{report_id}"
