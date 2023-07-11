@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import List
 
@@ -135,9 +136,10 @@ class SascatalogSource(Source):
         pass
 
     def next_record(self):
+        self.table_fqns = []
         table_entities = self.sasCatalog_client.list_instances()
-        # for table in table_entities:
-        #    yield from self.create_table_entity(table)
+        for table in table_entities:
+            yield from self.create_table_entity(table)
         #'''
         report_entities = self.sasCatalog_client.list_reports()
         for report in report_entities:
@@ -162,7 +164,14 @@ class SascatalogSource(Source):
                     report_charts,
                 )
             )
+            chart_list = []
             for chart in filtered_charts:
+                chart_regexp = "([(][0-9][)])"
+                modified_chart = re.sub(chart_regexp, "", chart["labelAttribute"])
+                new_chart_name = modified_chart.strip()
+                if new_chart_name in chart_list:
+                    continue
+                chart_list.append(new_chart_name)
                 yield from self.create_chart_entity(chart)
             report_tables = self.get_report_tables(report_resource_id)
             for table in report_tables:
@@ -283,6 +292,27 @@ class SascatalogSource(Source):
         db_schema_entity = self.metadata.create_or_update(db_schema)
         return db_schema_entity
 
+    def create_columns_alt(self, table):
+        columns_endpoint = ""
+        for link in table["links"]:
+            if link["rel"] == "columns":
+                columns_endpoint = link["uri"][1:] + "?limit=1000"
+        columns_resource = self.sasCatalog_client.get_resource(columns_endpoint)
+        columns = []
+        for item in columns_resource["items"]:
+            datatype = item["type"]
+            if datatype == "num":
+                datatype = "numeric"
+            parsed_string = ColumnTypeParser._parse_datatype_string(datatype)
+            col_name = item["name"]
+            parsed_string["name"] = col_name.replace('"', "'")
+            parsed_string["ordinalPosition"] = item["index"]
+            if datatype in ["char", "varchar", "binary", "varbinary"]:
+                parsed_string["dataLength"] = 0
+            col = Column(**parsed_string)
+            columns.append(col)
+        return columns
+
     def create_table_entity(self, table):
         # Create database + db service
         # Create database schema
@@ -293,6 +323,7 @@ class SascatalogSource(Source):
         table_resource_id = self.sasCatalog_client.get_instance(table_id)["resourceId"][
             1:
         ]
+        table_description = None
         views_query = {
             "query": "match (t:dataSet)-[r:dataSetDataFields]->(c:dataField) return t,r,c",
             "parameters": {"t": {"id": f"{table_id}"}},
@@ -427,6 +458,12 @@ class SascatalogSource(Source):
             col = Column(**parsed_string)
             columns.append(col)
 
+        if len(columns) == 0:
+            # Create columns alternatively
+            table_description = "Table has not been analyzed. Head over to SAS Information Catalog to analyze the table"
+            table_resource = self.sasCatalog_client.get_resource(table_resource_id)
+            columns = self.create_columns_alt(table_resource)
+
         # assert counter == col_count
         logger.info(f"{table_extension}")
         # Building table extension attr
@@ -439,6 +476,7 @@ class SascatalogSource(Source):
         table_request = CreateTableRequest(
             name=table_id,
             displayName=table_name,
+            description=table_description,
             columns=columns,
             databaseSchema=database_schema.fullyQualifiedName,
             # extension=table_extension
@@ -456,7 +494,7 @@ class SascatalogSource(Source):
         table_profile_request = CreateTableProfileRequest(
             tableProfile=table_profile, columnProfile=col_profile_list
         )
-
+        print(self.db_schema_name, self.db_name, self.db_service_name)
         table_fqn = fqn.build(
             self.metadata,
             entity_type=Table,
