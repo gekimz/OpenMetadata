@@ -56,17 +56,32 @@ class SASCatalogClient:
     def list_reports(self):
         report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
         filter_state = f"filter=eq(definitionId,'{report_id}')"
-        endpoint = f"catalog/instances?{filter_state}&limit=1"
-        response = self.client.get(endpoint)
+        endpoint = f"catalog/instances?{filter_state}&limit=3"
+        headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
+        response = self.client._request("GET", path=endpoint, headers=headers)
         if "error" in response.keys():
             raise APIError(response["error"])
         return response["items"]
 
     def get_report(self, reportId):
-        endpoint = f"reports/reports/{reportId}&limit=2"
+        endpoint = f"reports/reports/{reportId}"
         response = self.client.get(endpoint)
         if "error" in response.keys():
             return response
+
+    def list_data_plans(self):
+        data_plan_id = "91eb73eb-6480-4e32-afe6-d7e9f1bc84e8"
+        filter_state = f"filter=eq(definitionId, '{data_plan_id}')"
+        endpoint = f"catalog/instances?{filter_state}&limit=3"
+        headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
+        response = self.client._request("GET", path=endpoint, headers=headers)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        items = response["items"]
+        filtered_items = list(
+            filter(lambda x: "/dataPlans/plans/" in x["resourceId"], items)
+        )
+        return filtered_items
 
     def get_views(self, query):
         endpoint = "catalog/instances"
