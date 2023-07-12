@@ -56,7 +56,8 @@ class SASCatalogClient:
     def list_reports(self):
         report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
         filter_state = f"filter=eq(definitionId,'{report_id}')"
-        endpoint = f"catalog/instances?{filter_state}&limit=3"
+        filter_state = "filter=eq(name,'Migration Summary Report')"
+        endpoint = f"catalog/instances?{filter_state}&limit=4"
         headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
         response = self.client._request("GET", path=endpoint, headers=headers)
         if "error" in response.keys():

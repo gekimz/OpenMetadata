@@ -4,6 +4,8 @@ import time
 from typing import List
 
 import jsonpatch
+import requests
+from requests.exceptions import HTTPError
 
 from metadata.generated.schema.api.data.createChart import CreateChartRequest
 from metadata.generated.schema.api.data.createDashboard import CreateDashboardRequest
@@ -119,6 +121,8 @@ class SascatalogSource(Source):
         self.dashboard_service_name = None
         self.chart_names = None
 
+        self.report_description = None
+
     # self.add_table_custom_attributes()
 
     @classmethod
@@ -173,7 +177,12 @@ class SascatalogSource(Source):
                     continue
                 chart_list.append(new_chart_name)
                 yield from self.create_chart_entity(chart)
+            self.report_description = None
             report_tables = self.get_report_tables(report_resource_id)
+            if self.report_description == []:
+                self.report_description = None
+            else:
+                self.report_description = str(self.report_description)
             for table in report_tables:
                 yield from self.create_table_entity(table)
             yield from self.create_report_entity(report)
@@ -617,14 +626,22 @@ class SascatalogSource(Source):
     def get_report_tables(self, report_id):
         report_tables = self.sasCatalog_client.get_report_relationship(report_id)
         table_instances = []
+        self.report_description = []
         for table in report_tables:
-            table_uri = table["relatedResourceUri"][1:]
-            table_resource = self.sasCatalog_client.get_resource(table_uri)
-            table_name = table_resource["name"]
-            table_data_resource = table_resource["tableReference"]["tableUri"]
-            param = f"filter=and(eq(name, '{table_name}'),eq(resourceId,'{table_data_resource}'))"
-            table_instance = self.sasCatalog_client.get_instances_with_param(param)[0]
-            table_instances.append(table_instance)
+            try:
+                table_uri = table["relatedResourceUri"][1:]
+                table_resource = self.sasCatalog_client.get_resource(table_uri)
+                table_name = table_resource["name"]
+                table_data_resource = table_resource["tableReference"]["tableUri"]
+                param = f"filter=eq(resourceId,'{table_data_resource}')"
+                if "state" in table_resource and table_resource["state"] == "unloaded":
+                    self.sasCatalog_client.load_table(table_uri + "/state?value=loaded")
+                table_instance = self.sasCatalog_client.get_instances_with_param(param)[
+                    0
+                ]
+                table_instances.append(table_instance)
+            except HTTPError as e:
+                self.report_description.append(str(e))
         return table_instances
 
         #     yield from self.create_table_entity(table_instance)
@@ -648,7 +665,7 @@ class SascatalogSource(Source):
         report_instance = self.sasCatalog_client.get_instance(report_id)
         logger.info(f"{self.config.type}")
         logger.info(f"{self.service_connection}")
-        report_resource = report_instance["resourceId"]
+        report_resource = report["resourceId"]
         report_url = self.sasCatalog_client.get_report_link(report_resource)
         report_request = CreateDashboardRequest(
             name=report_id,
@@ -656,6 +673,7 @@ class SascatalogSource(Source):
             dashboardUrl=report_url,
             charts=self.chart_names,
             service=self.dashboard_service_name,
+            description=self.report_description,
         )
         yield report_request
 
@@ -670,10 +688,12 @@ class SascatalogSource(Source):
             entity=Dashboard, fqn=dashboard_fqn
         )
         table_entities = []
+        print(self.table_fqns)
         for table in self.table_fqns:
             table_entity = self.metadata.get_by_name(entity=Table, fqn=table)
             table_entities.append(table_entity)
-        yield self.create_lineage_request(dashboard_entity, table_entities)
+        if table_entities:
+            yield self.create_lineage_request(dashboard_entity, table_entities)
 
     def close(self):
         pass
