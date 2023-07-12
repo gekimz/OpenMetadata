@@ -1,5 +1,4 @@
 import json
-import re
 import time
 from typing import List
 
@@ -140,53 +139,57 @@ class SascatalogSource(Source):
         pass
 
     def next_record(self):
-        self.table_fqns = []
-        table_entities = self.sasCatalog_client.list_instances()
-        for table in table_entities:
-            yield from self.create_table_entity(table)
-        #'''
-        report_entities = self.sasCatalog_client.list_reports()
-        for report in report_entities:
-            self.table_fqns = []
-            self.chart_names = []
-            yield from self.create_dashboard_service()
-            # There isn't a schema for creating report entities, maybe this'll work instead
-            report_id = report["id"]
-            report_instance = self.sasCatalog_client.get_instance(report_id)
-            report_resource = report_instance["resourceId"]
-            report_resource_id = self.sasCatalog_client.get_resource(
-                report_resource[1:]
-            )["id"]
-            report_charts = self.sasCatalog_client.get_visual_elements(
-                report_resource_id
-            )
-            supported_chart_types = ["Graph", "Text", "Table"]
-            filtered_charts = list(
-                filter(
-                    lambda x: x["@element"] in supported_chart_types
-                    and "labelAttribute" in x,
-                    report_charts,
-                )
-            )
-            chart_list = []
-            for chart in filtered_charts:
-                chart_regexp = "([(][0-9][)])"
-                modified_chart = re.sub(chart_regexp, "", chart["labelAttribute"])
-                new_chart_name = modified_chart.strip()
-                if new_chart_name in chart_list:
-                    continue
-                chart_list.append(new_chart_name)
-                yield from self.create_chart_entity(chart)
-            self.report_description = None
-            report_tables = self.get_report_tables(report_resource_id)
-            if self.report_description == []:
-                self.report_description = None
-            else:
-                self.report_description = str(self.report_description)
-            for table in report_tables:
-                yield from self.create_table_entity(table)
-            yield from self.create_report_entity(report)
+        # self.table_fqns = []
+        # table_entities = self.sasCatalog_client.list_instances()
+        # for table in table_entities:
+        #     yield from self.create_table_entity(table)
+        # #'''
+        # report_entities = self.sasCatalog_client.list_reports()
+        # for report in report_entities:
+        #     self.table_fqns = []
+        #     self.chart_names = []
+        #     yield from self.create_dashboard_service("SAS_reports")
+        #     # There isn't a schema for creating report entities, maybe this'll work instead
+        #     report_id = report["id"]
+        #     report_instance = self.sasCatalog_client.get_instance(report_id)
+        #     report_resource = report_instance["resourceId"]
+        #     report_resource_id = self.sasCatalog_client.get_resource(
+        #         report_resource[1:]
+        #     )["id"]
+        #     report_charts = self.sasCatalog_client.get_visual_elements(
+        #         report_resource_id
+        #     )
+        #     supported_chart_types = ["Graph", "Text", "Table"]
+        #     filtered_charts = list(
+        #         filter(
+        #             lambda x: x["@element"] in supported_chart_types
+        #             and "labelAttribute" in x,
+        #             report_charts,
+        #         )
+        #     )
+        #     chart_list = []
+        #     for chart in filtered_charts:
+        #         chart_regexp = "([(][0-9][)])"
+        #         modified_chart = re.sub(chart_regexp, "", chart["labelAttribute"])
+        #         new_chart_name = modified_chart.strip()
+        #         if new_chart_name in chart_list:
+        #             continue
+        #         chart_list.append(new_chart_name)
+        #         yield from self.create_chart_entity(chart)
+        #     self.report_description = None
+        #     report_tables = self.get_report_tables(report_resource_id)
+        #     if self.report_description == []:
+        #         self.report_description = None
+        #     else:
+        #         self.report_description = str(self.report_description)
+        #     for table in report_tables:
+        #         yield from self.create_table_entity(table)
+        #     yield from self.create_report_entity(report)
 
+        data_plan_entities = self.sasCatalog_client.list_data_plans()
+        for data_plan in data_plan_entities:
+            yield from self.create_dashboard_service("SAS_dataPlans")
+            yield from self.create_data_plan_entity(data_plan)
         #'''
 
     def create_database_service(self, service_name):
@@ -499,15 +502,6 @@ class SascatalogSource(Source):
 
         yield table_request
 
-        table_profile_dict = dict()
-        timestamp = time.time()
-        table_profile_dict["timestamp"] = timestamp
-        table_profile_dict["rowCount"] = row_count
-        table_profile_dict["columnCount"] = col_count
-        table_profile = TableProfile(**table_profile_dict)
-        table_profile_request = CreateTableProfileRequest(
-            tableProfile=table_profile, columnProfile=col_profile_list
-        )
         print(self.db_schema_name, self.db_name, self.db_service_name)
         table_fqn = fqn.build(
             self.metadata,
@@ -545,6 +539,15 @@ class SascatalogSource(Source):
             path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/sampleData",
             data=json.dumps(table_data),
         )
+        table_profile_dict = dict()
+        timestamp = time.time()
+        table_profile_dict["timestamp"] = timestamp
+        table_profile_dict["rowCount"] = len(rows)
+        table_profile_dict["columnCount"] = col_count
+        table_profile = TableProfile(**table_profile_dict)
+        table_profile_request = CreateTableProfileRequest(
+            tableProfile=table_profile, columnProfile=col_profile_list
+        )
         self.metadata.client.put(
             path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/tableProfile",
             data=table_profile_request.json(),
@@ -577,8 +580,7 @@ class SascatalogSource(Source):
         rows = list(map(lambda x: x["cells"], rows_source))
         return TableData(columns=col_names, rows=rows)
 
-    def create_dashboard_service(self):
-        dashboard_service_name = "SAS_reports"
+    def create_dashboard_service(self, dashboard_service_name):
         self.dashboard_service_name = dashboard_service_name
         dashboard_service_request = CreateDashboardServiceRequest(
             name=dashboard_service_name,
@@ -666,7 +668,7 @@ class SascatalogSource(Source):
         logger.info(f"{self.config.type}")
         logger.info(f"{self.service_connection}")
         report_resource = report["resourceId"]
-        report_url = self.sasCatalog_client.get_report_link(report_resource)
+        report_url = self.sasCatalog_client.get_report_link("report", report_resource)
         report_request = CreateDashboardRequest(
             name=report_id,
             displayName=report_instance["name"],
@@ -694,6 +696,20 @@ class SascatalogSource(Source):
             table_entities.append(table_entity)
         if table_entities:
             yield self.create_lineage_request(dashboard_entity, table_entities)
+
+    def create_data_plan_entity(self, data_plan):
+        data_plan_id = data_plan["id"]
+        data_plan_resource = data_plan["resourceId"]
+        data_plan_url = self.sasCatalog_client.get_report_link(
+            "dataPlan", data_plan_resource
+        )
+        data_plan_request = CreateDashboardRequest(
+            name=data_plan_id,
+            displayName=data_plan["name"],
+            service=self.dashboard_service_name,
+            dashboardUrl=data_plan_url,
+        )
+        yield data_plan_request
 
     def close(self):
         pass

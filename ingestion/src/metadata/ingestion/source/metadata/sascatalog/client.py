@@ -56,7 +56,6 @@ class SASCatalogClient:
     def list_reports(self):
         report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
         filter_state = f"filter=eq(definitionId,'{report_id}')"
-        filter_state = "filter=eq(name,'Migration Summary Report')"
         endpoint = f"catalog/instances?{filter_state}&limit=4"
         headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
         response = self.client._request("GET", path=endpoint, headers=headers)
@@ -122,7 +121,7 @@ class SASCatalogClient:
             if rows_uri and load_uri and cols_uri:
                 break
             if link["rel"] == "rows":
-                rows_uri = link["uri"][1:]
+                rows_uri = link["uri"][1:] + "?limit=1000000"
             if link["rel"] == "load":
                 load_uri = link["uri"][1:]
             if link["rel"] == "columns":
@@ -142,9 +141,9 @@ class SASCatalogClient:
         col_names_proper = list(map(lambda x: x.replace('"', "'"), col_names))
         return rows, col_names_proper
 
-    def get_report_link(self, uri):
+    def get_report_link(self, resource, uri):
         revised_uri = uri.replace("/", "%2F")
-        endpoint = f"/links/resources/report?uri={revised_uri}"
+        endpoint = f"/links/resources/{resource}?uri={revised_uri}"
         return self.config.serverHost + endpoint
 
     def load_table(self, endpoint):
