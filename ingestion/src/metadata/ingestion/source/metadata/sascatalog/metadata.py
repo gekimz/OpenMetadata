@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import List
 
@@ -139,57 +140,78 @@ class SascatalogSource(Source):
         pass
 
     def next_record(self):
-        # self.table_fqns = []
-        # table_entities = self.sasCatalog_client.list_instances()
-        # for table in table_entities:
-        #     yield from self.create_table_entity(table)
-        # #'''
-        # report_entities = self.sasCatalog_client.list_reports()
-        # for report in report_entities:
-        #     self.table_fqns = []
-        #     self.chart_names = []
-        #     yield from self.create_dashboard_service("SAS_reports")
-        #     # There isn't a schema for creating report entities, maybe this'll work instead
-        #     report_id = report["id"]
-        #     report_instance = self.sasCatalog_client.get_instance(report_id)
-        #     report_resource = report_instance["resourceId"]
-        #     report_resource_id = self.sasCatalog_client.get_resource(
-        #         report_resource[1:]
-        #     )["id"]
-        #     report_charts = self.sasCatalog_client.get_visual_elements(
-        #         report_resource_id
-        #     )
-        #     supported_chart_types = ["Graph", "Text", "Table"]
-        #     filtered_charts = list(
-        #         filter(
-        #             lambda x: x["@element"] in supported_chart_types
-        #             and "labelAttribute" in x,
-        #             report_charts,
-        #         )
-        #     )
-        #     chart_list = []
-        #     for chart in filtered_charts:
-        #         chart_regexp = "([(][0-9][)])"
-        #         modified_chart = re.sub(chart_regexp, "", chart["labelAttribute"])
-        #         new_chart_name = modified_chart.strip()
-        #         if new_chart_name in chart_list:
-        #             continue
-        #         chart_list.append(new_chart_name)
-        #         yield from self.create_chart_entity(chart)
-        #     self.report_description = None
-        #     report_tables = self.get_report_tables(report_resource_id)
-        #     if self.report_description == []:
-        #         self.report_description = None
-        #     else:
-        #         self.report_description = str(self.report_description)
-        #     for table in report_tables:
-        #         yield from self.create_table_entity(table)
-        #     yield from self.create_report_entity(report)
+        self.table_fqns = []
+        table_entities = self.sasCatalog_client.list_instances()
+        for table in table_entities:
+            yield from self.create_table_entity(table)
+        #'''
+        report_entities = self.sasCatalog_client.list_reports()
+        yield from self.create_dashboard_service("SAS_reports")
+        for report in report_entities:
+            self.table_fqns = []
+            self.chart_names = []
+
+            # There isn't a schema for creating report entities, maybe this'll work instead
+            report_id = report["id"]
+            report_instance = self.sasCatalog_client.get_instance(report_id)
+            report_resource = report_instance["resourceId"]
+            report_resource_id = self.sasCatalog_client.get_resource(
+                report_resource[1:]
+            )["id"]
+            report_charts = self.sasCatalog_client.get_visual_elements(
+                report_resource_id
+            )
+            supported_chart_types = ["Graph", "Text", "Table"]
+            filtered_charts = list(
+                filter(
+                    lambda x: x["@element"] in supported_chart_types
+                    and "labelAttribute" in x,
+                    report_charts,
+                )
+            )
+            chart_list = []
+            for chart in filtered_charts:
+                chart_regexp = "([(][0-9][)])"
+                modified_chart = re.sub(chart_regexp, "", chart["labelAttribute"])
+                new_chart_name = modified_chart.strip()
+                if new_chart_name in chart_list:
+                    continue
+                chart_list.append(new_chart_name)
+                yield from self.create_chart_entity(chart)
+            self.report_description = None
+            report_tables = self.get_report_tables(report_resource_id)
+            if self.report_description == []:
+                self.report_description = None
+            else:
+                self.report_description = str(self.report_description)
+            for table in report_tables:
+                yield from self.create_table_entity(table)
+            yield from self.create_report_entity(report)
 
         data_plan_entities = self.sasCatalog_client.list_data_plans()
+        yield from self.create_dashboard_service("SAS_dataPlans")
         for data_plan in data_plan_entities:
-            yield from self.create_dashboard_service("SAS_dataPlans")
-            yield from self.create_data_plan_entity(data_plan)
+            self.table_fqns = []
+            data_plan_instance = self.sasCatalog_client.get_instance(data_plan["id"])
+            input_asset_definition = "6179884b-91ec-4236-ad6b-52c7f454f217"
+            output_asset_definition = "e1349270-fdbb-4231-9841-79917a307471"
+            input_asset_ids = []
+            output_asset_ids = []
+            for rel in data_plan_instance["relationships"]:
+                if rel["definitionId"] == input_asset_definition:
+                    input_asset_ids.append(rel["endpointId"])
+                elif rel["definitionId"] == output_asset_definition:
+                    output_asset_ids.append(rel["endpointId"])
+            input_assets = self.create_in_out_tables(input_asset_ids)
+            output_assets = self.create_in_out_tables(output_asset_ids)
+            for input_asset in input_assets:
+                yield from self.create_table_entity(input_asset)
+            input_fqns = self.table_fqns
+            self.table_fqns = []
+            for output_asset in output_assets:
+                yield from self.create_table_entity(output_asset)
+            output_fqns = self.table_fqns
+            yield from self.create_data_plan_entity(data_plan, input_fqns, output_fqns)
         #'''
 
     def create_database_service(self, service_name):
@@ -651,16 +673,13 @@ class SascatalogSource(Source):
         #     table_entities.append(table_entity)
         # return table_entities
 
-    def create_lineage_request(self, dashboard, table_entities):
-        for table in table_entities:
-            return AddLineageRequest(
-                edge=EntitiesEdge(
-                    fromEntity=EntityReference(id=table.id.__root__, type="table"),
-                    toEntity=EntityReference(
-                        id=dashboard.id.__root__, type="dashboard"
-                    ),
-                )
+    def create_lineage_request(self, from_type, in_type, from_entity, to_entity):
+        return AddLineageRequest(
+            edge=EntitiesEdge(
+                fromEntity=EntityReference(id=from_entity.id.__root__, type=from_type),
+                toEntity=EntityReference(id=to_entity.id.__root__, type=in_type),
             )
+        )
 
     def create_report_entity(self, report):
         report_id = report["id"]
@@ -694,12 +713,22 @@ class SascatalogSource(Source):
         for table in self.table_fqns:
             table_entity = self.metadata.get_by_name(entity=Table, fqn=table)
             table_entities.append(table_entity)
-        if table_entities:
-            yield self.create_lineage_request(dashboard_entity, table_entities)
+        for entity in table_entities:
+            yield self.create_lineage_request(
+                "table", "dashboard", entity, dashboard_entity
+            )
 
-    def create_data_plan_entity(self, data_plan):
+    def create_in_out_tables(self, table_ids):
+        table_entities = []
+        for id in table_ids:
+            asset = self.sasCatalog_client.get_instance(id)
+            table_entities.append(asset)
+        return table_entities
+
+    def create_data_plan_entity(self, data_plan, input_fqns, output_fqns):
         data_plan_id = data_plan["id"]
         data_plan_resource = data_plan["resourceId"]
+        data_plan_instance = self.sasCatalog_client.get_instance(data_plan_id)
         data_plan_url = self.sasCatalog_client.get_report_link(
             "dataPlan", data_plan_resource
         )
@@ -710,6 +739,35 @@ class SascatalogSource(Source):
             dashboardUrl=data_plan_url,
         )
         yield data_plan_request
+
+        dashboard_fqn = fqn.build(
+            self.metadata,
+            entity_type=Dashboard,
+            service_name=self.dashboard_service_name,
+            dashboard_name=report_id,
+        )
+
+        dashboard_entity = self.metadata.get_by_name(
+            entity=Dashboard, fqn=dashboard_fqn
+        )
+
+        input_entities = []
+        output_entities = []
+        for input in input_fqns:
+            input_entity = self.metadata.get_by_name(entity=Table, fqn=input)
+            input_entities.append(input_entity)
+        for output in output_fqns:
+            output_entity = self.metadata.get_by_name(entity=Table, fqn=output)
+            output_entities.append(output_entity)
+
+        for entity in input_entities:
+            yield self.create_lineage_request(
+                "table", "dashboard", entity, dashboard_entity
+            )
+        for entity in output_entities:
+            yield self.create_lineage_request(
+                "dashboard", "table", dashboard_entity, entity
+            )
 
     def close(self):
         pass
