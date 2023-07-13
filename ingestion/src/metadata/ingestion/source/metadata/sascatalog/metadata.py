@@ -488,7 +488,7 @@ class SascatalogSource(Source):
                         )
                         custom_metrics_list.append(custom_metrics)
             col_profile_dict["customMetricsProfile"] = custom_metrics_list
-            timestamp = time.time()
+            timestamp = time.time() - 100000
             col_profile_dict["timestamp"] = timestamp
             col_profile_dict["name"] = parsed_string["name"]
             column_profile = ColumnProfile(**col_profile_dict)
@@ -562,7 +562,10 @@ class SascatalogSource(Source):
         self.metadata.client.patch(
             path=f"/tables/{table_entity.id.__root__}", data=json.dumps(patch)
         )
-        if "This table does not exist in the file path" in table_description:
+        if (
+            table_description
+            and "This table does not exist in the file path" in table_description
+        ):
             return
         """
         for column in table_entity.columns:
@@ -578,10 +581,9 @@ class SascatalogSource(Source):
             data=json.dumps(table_data),
         )
         table_profile_dict = dict()
-        timestamp = time.time()
         table_profile_dict["timestamp"] = timestamp
         table_profile_dict["rowCount"] = len(rows)
-        table_profile_dict["columnCount"] = col_count
+        table_profile_dict["columnCount"] = len(cols)
         table_profile = TableProfile(**table_profile_dict)
         table_profile_request = CreateTableProfileRequest(
             tableProfile=table_profile, columnProfile=col_profile_list
@@ -668,8 +670,8 @@ class SascatalogSource(Source):
         table_instances = []
         self.report_description = []
         for table in report_tables:
+            table_uri = table["relatedResourceUri"][1:]
             try:
-                table_uri = table["relatedResourceUri"][1:]
                 table_resource = self.sasCatalog_client.get_resource(table_uri)
                 table_name = table_resource["name"]
                 table_data_resource = table_resource["tableReference"]["tableUri"]
@@ -682,6 +684,13 @@ class SascatalogSource(Source):
                 table_instances.append(table_instance)
             except HTTPError as e:
                 self.report_description.append(str(e))
+                name_index = table_uri.rindex("/")
+                table_name = table_uri[name_index + 1 :]
+                param = f"filter=eq(name, '{table_name}')"
+                table_instance = self.sasCatalog_client.get_instances_with_param(param)[
+                    0
+                ]
+                table_instances.append(table_instance)
         return table_instances
 
         #     yield from self.create_table_entity(table_instance)
