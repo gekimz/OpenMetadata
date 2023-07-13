@@ -238,34 +238,36 @@ class SascatalogSource(Source):
             logger.error(f"Create a service with name {service_name}")
         return db_service_entity
 
-    def create_database(self, db):
+    def create_database_alt(self, db):
         # We find the name of the mock DB service
         # Use the link to the parent of the resourceId of the datastore itself, and use its name
         # Then the db service name will be the provider id
-        # data_store_endpoint = db["resourceId"][1:]
-        # logger.info(f"{data_store_endpoint}")
-        # data_store_resource = self.sasCatalog_client.get_data_source(
-        #     data_store_endpoint
-        # )
-        # db_service = self.create_database_service(data_store_resource["providerId"])
-        #
-        # data_store_parent_endpoint = ""
-        # for link in data_store_resource["links"]:
-        #     if link["rel"] == "parent":
-        #         data_store_parent_endpoint = link["uri"][1:]
-        #         break
-        #
-        # data_store_parent = self.sasCatalog_client.get_data_source(
-        #     data_store_parent_endpoint
-        # )
-        # self.db_name = data_store_parent["id"]
-        # database = CreateDatabaseRequest(
-        #     name=data_store_parent["id"],
-        #     displayName=data_store_parent["name"],
-        #     service=db_service.fullyQualifiedName,
-        # )
-        # database_entity = self.metadata.create_or_update(data=database)
-        # return database_entity
+        data_store_endpoint = db["resourceId"][1:]
+        logger.info(f"{data_store_endpoint}")
+        data_store_resource = self.sasCatalog_client.get_data_source(
+            data_store_endpoint
+        )
+        db_service = self.create_database_service(data_store_resource["providerId"])
+
+        data_store_parent_endpoint = ""
+        for link in data_store_resource["links"]:
+            if link["rel"] == "parent":
+                data_store_parent_endpoint = link["uri"][1:]
+                break
+
+        data_store_parent = self.sasCatalog_client.get_data_source(
+            data_store_parent_endpoint
+        )
+        self.db_name = data_store_parent["id"]
+        database = CreateDatabaseRequest(
+            name=data_store_parent["id"],
+            displayName=data_store_parent["name"],
+            service=db_service.fullyQualifiedName,
+        )
+        database_entity = self.metadata.create_or_update(data=database)
+        return database_entity
+
+    def create_database(self, db):
         db_service = self.create_database_service(db["providerId"])
         data_store_parent_endpoint = ""
         for link in db["links"]:
@@ -286,45 +288,50 @@ class SascatalogSource(Source):
 
     def create_database_schema(self, table):
         table_detail = self.sasCatalog_client.get_instance(table["id"])
-        # We find the "database" entity in catalog
-        # We first see if the table is a member of the library through the relationships attribute
-        # Or we could use views to query the dataStores
-        # data_store_data_sets = "4b114f6e-1c2a-4060-9184-6809a612f27b"
-        # data_store_id = None
-        # for relation in table_detail["relationships"]:
-        #     if relation["definitionId"] != data_store_data_sets:
-        #         continue
-        #     data_store_id = relation["endpointId"]
-        #     break
-        #
-        # if data_store_id is None:
-        #     # For now we'll print error since we are exclusively working with tables in dataTables
-        #     logger.error("Data store id should not be none")
-        #     return None
-        #
-        # data_store = self.sasCatalog_client.get_instance(data_store_id)
-        # database = self.create_database(data_store)
-        # self.db_schema_name = data_store["name"]
-        # db_schema = CreateDatabaseSchemaRequest(
-        #     name=data_store["name"], database=database.fullyQualifiedName
-        # )
-        # db_schema_entity = self.metadata.create_or_update(db_schema)
-        # return db_schema_entity
-        table_resource_endpoint = table_detail["resourceId"][1:]
-        table_resource = self.sasCatalog_client.get_resource(table_resource_endpoint)
-        data_store_endpoint = ""
-        for link in table_resource["links"]:
-            if link["rel"] == "dataSource":
-                data_store_endpoint = link["uri"][1:]
+
+        try:
+            table_resource_endpoint = table_detail["resourceId"][1:]
+            table_resource = self.sasCatalog_client.get_resource(
+                table_resource_endpoint
+            )
+            data_store_endpoint = ""
+            for link in table_resource["links"]:
+                if link["rel"] == "dataSource":
+                    data_store_endpoint = link["uri"][1:]
+                    break
+            data_store = self.sasCatalog_client.get_data_source(data_store_endpoint)
+            database = self.create_database(data_store)
+            self.db_schema_name = data_store["name"]
+            db_schema = CreateDatabaseSchemaRequest(
+                name=data_store["name"], database=database.fullyQualifiedName
+            )
+            db_schema_entity = self.metadata.create_or_update(db_schema)
+            return db_schema_entity
+        except HTTPError as httperror:
+            # We find the "database" entity in catalog
+            # We first see if the table is a member of the library through the relationships attribute
+            # Or we could use views to query the dataStores
+            data_store_data_sets = "4b114f6e-1c2a-4060-9184-6809a612f27b"
+            data_store_id = None
+            for relation in table_detail["relationships"]:
+                if relation["definitionId"] != data_store_data_sets:
+                    continue
+                data_store_id = relation["endpointId"]
                 break
-        data_store = self.sasCatalog_client.get_data_source(data_store_endpoint)
-        database = self.create_database(data_store)
-        self.db_schema_name = data_store["name"]
-        db_schema = CreateDatabaseSchemaRequest(
-            name=data_store["name"], database=database.fullyQualifiedName
-        )
-        db_schema_entity = self.metadata.create_or_update(db_schema)
-        return db_schema_entity
+
+            if data_store_id is None:
+                # For now we'll print error since we are exclusively working with tables in dataTables
+                logger.error("Data store id should not be none")
+                return None
+
+            data_store = self.sasCatalog_client.get_instance(data_store_id)
+            database = self.create_database_alt(data_store)
+            self.db_schema_name = data_store["name"]
+            db_schema = CreateDatabaseSchemaRequest(
+                name=data_store["name"], database=database.fullyQualifiedName
+            )
+            db_schema_entity = self.metadata.create_or_update(db_schema)
+            return db_schema_entity
 
     def create_columns_alt(self, table):
         columns_endpoint = ""
@@ -500,8 +507,13 @@ class SascatalogSource(Source):
         if len(columns) == 0:
             # Create columns alternatively
             table_description = "Table has not been analyzed. Head over to SAS Information Catalog to analyze the table"
-            table_resource = self.sasCatalog_client.get_resource(table_resource_id)
-            columns = self.create_columns_alt(table_resource)
+            try:
+                table_resource = self.sasCatalog_client.get_resource(table_resource_id)
+                columns = self.create_columns_alt(table_resource)
+            except HTTPError as httperror:
+                table_description = (
+                    str(httperror) + " This table does not exist in the file path"
+                )
 
         # assert counter == col_count
         logger.info(f"{table_extension}")
@@ -525,6 +537,7 @@ class SascatalogSource(Source):
         yield table_request
 
         print(self.db_schema_name, self.db_name, self.db_service_name)
+
         table_fqn = fqn.build(
             self.metadata,
             entity_type=Table,
@@ -535,6 +548,7 @@ class SascatalogSource(Source):
         )
 
         self.table_fqns.append(table_fqn)
+
         table_entity = self.metadata.get_by_name(entity=Table, fqn=table_fqn)
         patches = []
         for attr in table_extension:
@@ -548,6 +562,8 @@ class SascatalogSource(Source):
         self.metadata.client.patch(
             path=f"/tables/{table_entity.id.__root__}", data=json.dumps(patch)
         )
+        if "This table does not exist in the file path" in table_description:
+            return
         """
         for column in table_entity.columns:
             resp = self.metadata.client.get(
@@ -726,6 +742,7 @@ class SascatalogSource(Source):
         return table_entities
 
     def create_data_plan_entity(self, data_plan, input_fqns, output_fqns):
+        print(input_fqns, output_fqns)
         data_plan_id = data_plan["id"]
         data_plan_resource = data_plan["resourceId"]
         data_plan_instance = self.sasCatalog_client.get_instance(data_plan_id)
@@ -744,7 +761,7 @@ class SascatalogSource(Source):
             self.metadata,
             entity_type=Dashboard,
             service_name=self.dashboard_service_name,
-            dashboard_name=report_id,
+            dashboard_name=data_plan_id,
         )
 
         dashboard_entity = self.metadata.get_by_name(
