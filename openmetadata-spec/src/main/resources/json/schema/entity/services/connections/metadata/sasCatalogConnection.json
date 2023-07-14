@@ -4,7 +4,7 @@
   "title": "SASCatalogConnection",
   "description": "SAS Catalog Connection Config",
   "type": "object",
-  "javaType": "org.openmetadata.schema.services.connections.metadata.sasCatalogConnection",
+  "javaType": "org.openmetadata.schema.services.connections.metadata.SASCatalogConnection",
   "definitions": {
     "sasCatalogType": {
       "description": "Service type.",
