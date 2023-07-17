@@ -104,7 +104,7 @@ class DomodashboardSource(DashboardServiceSource):
                     if user:
                         return EntityReference(id=user.id.__root__, type="user")
                     logger.warning(
-                        f"No user for found for email {owner_details['email']} in OMD"
+                        f"No user found with email [{owner_details['email']}] in OMD"
                     )
             except Exception as exc:
                 logger.warning(
@@ -122,7 +122,7 @@ class DomodashboardSource(DashboardServiceSource):
 
             dashboard_request = CreateDashboardRequest(
                 name=dashboard_details.id,
-                dashboardUrl=dashboard_url,
+                sourceUrl=dashboard_url,
                 displayName=dashboard_details.name,
                 description=dashboard_details.description,
                 charts=[
@@ -212,7 +212,7 @@ class DomodashboardSource(DashboardServiceSource):
                         name=chart_id,
                         description=chart.description,
                         displayName=chart.name,
-                        chartUrl=chart_url,
+                        sourceUrl=chart_url,
                         service=self.context.dashboard_service.fullyQualifiedName.__root__,
                         chartType=get_standard_chart_type(chart.metadata.chartType),
                     )

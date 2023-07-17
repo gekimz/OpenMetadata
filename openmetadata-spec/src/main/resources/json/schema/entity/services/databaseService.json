@@ -46,7 +46,8 @@
         "QueryLog",
         "CustomDatabase",
         "Dbt",
-        "SapHana"
+        "SapHana",
+        "MongoDB"
       ],
       "javaEnums": [
         {
@@ -144,6 +145,9 @@
         },
         {
           "name": "SapHana"
+        },
+        {
+          "name": "MongoDB"
         }
       ]
     },
@@ -246,6 +250,9 @@
             },
             {
               "$ref": "./connections/database/sapHanaConnection.json"
+            },
+            {
+              "$ref": "./connections/database/mongoDBConnection.json"
             }
           ]
         }
@@ -325,6 +332,10 @@
       "description": "When `true` indicates the entity has been soft deleted.",
       "type": "boolean",
       "default": false
+    },
+    "domain" : {
+      "description": "Domain the Database service belongs to.",
+      "$ref": "../../type/entityReference.json"
     }
   },
   "required": ["id", "name", "serviceType"],

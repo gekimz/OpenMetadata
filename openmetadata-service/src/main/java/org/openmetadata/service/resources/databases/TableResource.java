@@ -73,6 +73,7 @@ import org.openmetadata.service.resources.Collection;
 import org.openmetadata.service.resources.EntityResource;
 import org.openmetadata.service.security.Authorizer;
 import org.openmetadata.service.security.policyevaluator.OperationContext;
+import org.openmetadata.service.security.policyevaluator.ResourceContext;
 import org.openmetadata.service.util.EntityUtil.Fields;
 import org.openmetadata.service.util.ResultList;
 
@@ -83,6 +84,9 @@ import org.openmetadata.service.util.ResultList;
 @Collection(name = "tables")
 public class TableResource extends EntityResource<Table, TableRepository> {
   public static final String COLLECTION_PATH = "v1/tables/";
+  static final String FIELDS =
+      "tableConstraints,tablePartition,usageSummary,owner,customMetrics,"
+          + "tags,followers,joins,viewDefinition,dataModel,extension,testSuite,domain,dataProducts";
 
   @Override
   public Table addHref(UriInfo uriInfo, Table table) {
@@ -135,10 +139,6 @@ public class TableResource extends EntityResource<Table, TableRepository> {
     /* Required for serde */
   }
 
-  static final String FIELDS =
-      "tableConstraints,tablePartition,usageSummary,owner,customMetrics,"
-          + "tags,followers,joins,viewDefinition,dataModel,extension,testSuite";
-
   @GET
   @Operation(
       operationId = "listTables",
@@ -171,6 +171,13 @@ public class TableResource extends EntityResource<Table, TableRepository> {
               schema = @Schema(type = "string", example = "snowflakeWestCoast.financeDB.schema"))
           @QueryParam("databaseSchema")
           String databaseSchemaParam,
+      @Parameter(
+              description =
+                  "Include tables with an empty test suite (i.e. no test cases have been created for this table). Default to true",
+              schema = @Schema(type = "boolean", example = "true"))
+          @QueryParam("includeEmptyTestSuite")
+          @DefaultValue("true")
+          boolean includeEmptyTestSuite,
       @Parameter(description = "Limit the number tables returned. (1 to 1000000, default = " + "10) ")
           @DefaultValue("10")
           @Min(0)
@@ -193,7 +200,8 @@ public class TableResource extends EntityResource<Table, TableRepository> {
     ListFilter filter =
         new ListFilter(include)
             .addQueryParam("database", databaseParam)
-            .addQueryParam("databaseSchema", databaseSchemaParam);
+            .addQueryParam("databaseSchema", databaseSchemaParam)
+            .addQueryParam("includeEmptyTestSuite", includeEmptyTestSuite);
     return super.listInternal(uriInfo, securityContext, fieldsParam, filter, limitParam, before, after);
   }
 
@@ -531,8 +539,12 @@ public class TableResource extends EntityResource<Table, TableRepository> {
       @Parameter(description = "Id of the table", schema = @Schema(type = "UUID")) @PathParam("id") UUID id)
       throws IOException {
     OperationContext operationContext = new OperationContext(entityType, MetadataOperation.VIEW_SAMPLE_DATA);
-    authorizer.authorize(securityContext, operationContext, getResourceContextById(id));
-    return addHref(uriInfo, repository.getSampleData(id));
+    ResourceContext resourceContext = getResourceContextById(id);
+    authorizer.authorize(securityContext, operationContext, resourceContext);
+    boolean authorizePII = authorizer.authorizePII(securityContext, resourceContext.getOwner());
+
+    Table table = repository.getSampleData(id, authorizePII);
+    return addHref(uriInfo, table);
   }
 
   @DELETE
@@ -647,8 +659,11 @@ public class TableResource extends EntityResource<Table, TableRepository> {
           String fqn)
       throws IOException {
     OperationContext operationContext = new OperationContext(entityType, MetadataOperation.VIEW_DATA_PROFILE);
-    authorizer.authorize(securityContext, operationContext, getResourceContextByName(fqn));
-    return repository.getLatestTableProfile(fqn);
+    ResourceContext resourceContext = getResourceContextByName(fqn);
+    authorizer.authorize(securityContext, operationContext, resourceContext);
+    boolean authorizePII = authorizer.authorizePII(securityContext, resourceContext.getOwner());
+
+    return repository.getLatestTableProfile(fqn, authorizePII);
   }
 
   @GET
@@ -928,6 +943,7 @@ public class TableResource extends EntityResource<Table, TableRepository> {
     return validateNewTable(
             copy(new Table(), create, user)
                 .withColumns(create.getColumns())
+                .withSourceUrl(create.getSourceUrl())
                 .withTableConstraints(create.getTableConstraints())
                 .withTablePartition(create.getTablePartition())
                 .withTableType(create.getTableType())
@@ -935,6 +951,7 @@ public class TableResource extends EntityResource<Table, TableRepository> {
                 .withViewDefinition(create.getViewDefinition())
                 .withTableProfilerConfig(create.getTableProfilerConfig())
                 .withDatabaseSchema(getEntityReference(Entity.DATABASE_SCHEMA, create.getDatabaseSchema())))
+        .withDatabaseSchema(getEntityReference(Entity.DATABASE_SCHEMA, create.getDatabaseSchema()))
         .withRetentionPeriod(create.getRetentionPeriod());
   }
 

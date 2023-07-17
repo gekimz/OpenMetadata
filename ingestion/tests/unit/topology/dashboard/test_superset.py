@@ -23,6 +23,9 @@ from sqlalchemy.engine import Engine
 from metadata.generated.schema.api.data.createChart import CreateChartRequest
 from metadata.generated.schema.api.data.createDashboard import CreateDashboardRequest
 from metadata.generated.schema.entity.data.chart import Chart, ChartType
+from metadata.generated.schema.entity.services.connections.database.common.basicAuth import (
+    BasicAuth,
+)
 from metadata.generated.schema.entity.services.connections.database.mysqlConnection import (
     MysqlConnection,
 )
@@ -52,6 +55,14 @@ from metadata.ingestion.source.dashboard.superset.api_source import SupersetAPIS
 from metadata.ingestion.source.dashboard.superset.client import SupersetAPIClient
 from metadata.ingestion.source.dashboard.superset.db_source import SupersetDBSource
 from metadata.ingestion.source.dashboard.superset.metadata import SupersetSource
+from metadata.ingestion.source.dashboard.superset.models import (
+    FetchChart,
+    FetchDashboard,
+    ListDatabaseResult,
+    SupersetChart,
+    SupersetDashboardCount,
+    SupersetDatasource,
+)
 
 mock_file_path = (
     Path(__file__).parent.parent.parent / "resources/datasets/superset_dataset.json"
@@ -59,13 +70,13 @@ mock_file_path = (
 with open(mock_file_path, encoding="UTF-8") as file:
     mock_data: dict = json.load(file)
 
-MOCK_DASHBOARD_RESP = mock_data["dashboard"]
-MOCK_DASHBOARD = MOCK_DASHBOARD_RESP["result"][0]
-MOCK_CHART_RESP = mock_data["chart"]
-MOCK_CHART = MOCK_CHART_RESP["result"][0]
+MOCK_DASHBOARD_RESP = SupersetDashboardCount(**mock_data["dashboard"])
+MOCK_DASHBOARD = MOCK_DASHBOARD_RESP.result[0]
+MOCK_CHART_RESP = SupersetChart(**mock_data["chart"])
+MOCK_CHART = MOCK_CHART_RESP.result[0]
 
-MOCK_CHART_DB = mock_data["chart-db"][0]
-MOCK_DASHBOARD_DB = mock_data["dashboard-db"]
+MOCK_CHART_DB = FetchChart(**mock_data["chart-db"][0])
+MOCK_DASHBOARD_DB = FetchDashboard(**mock_data["dashboard-db"])
 
 MOCK_SUPERSET_API_CONFIG = {
     "source": {
@@ -110,7 +121,9 @@ MOCK_SUPERSET_DB_CONFIG = {
                 "connection": {
                     "type": "Postgres",
                     "username": "superset",
-                    "password": "superset",
+                    "authType": {
+                        "password": "superset",
+                    },
                     "hostPort": "localhost:5432",
                     "database": "superset",
                 },
@@ -147,7 +160,9 @@ MOCK_DB_MYSQL_SERVICE_1 = DatabaseService(
     name="test_mysql",
     connection=DatabaseConnection(
         config=MysqlConnection(
-            username="user", password="pass", hostPort="localhost:3306"
+            username="user",
+            authType=BasicAuth(password="pass"),
+            hostPort="localhost:3306",
         )
     ),
     serviceType=DatabaseServiceType.Mysql,
@@ -160,7 +175,7 @@ MOCK_DB_MYSQL_SERVICE_2 = DatabaseService(
     connection=DatabaseConnection(
         config=MysqlConnection(
             username="user",
-            password="pass",
+            authType=BasicAuth(password="pass"),
             hostPort="localhost:3306",
             databaseName="DUMMY_DB",
         )
@@ -175,7 +190,7 @@ MOCK_DB_POSTGRES_SERVICE = DatabaseService(
     connection=DatabaseConnection(
         config=PostgresConnection(
             username="user",
-            password="pass",
+            authType=BasicAuth(password="pass"),
             hostPort="localhost:5432",
             database="postgres",
         )
@@ -197,8 +212,7 @@ EXPECTED_CHATRT_ENTITY = [
 EXPECTED_DASH = CreateDashboardRequest(
     name=14,
     displayName="My DASH",
-    description="",
-    dashboardUrl="https://my-superset.com/superset/dashboard/14/",
+    sourceUrl="https://my-superset.com/superset/dashboard/14/",
     charts=[chart.fullyQualifiedName for chart in EXPECTED_CHATRT_ENTITY],
     service=EXPECTED_DASH_SERVICE.fullyQualifiedName,
 )
@@ -208,7 +222,7 @@ EXPECTED_CHART = CreateChartRequest(
     displayName="% Rural",
     description="TEST DESCRIPTION",
     chartType=ChartType.Other.value,
-    chartUrl="https://my-superset.com/explore/?slice_id=37",
+    sourceUrl="https://my-superset.com/explore/?slice_id=37",
     service=EXPECTED_DASH_SERVICE.fullyQualifiedName,
 )
 
@@ -282,7 +296,9 @@ class SupersetUnitTest(TestCase):
                 "config": {
                     "type": "Mysql",
                     "username": "openmetadata_user",
-                    "password": "openmetadata_password",
+                    "authType": {
+                        "password": "openmetadata_password",
+                    },
                     "hostPort": "localhost:3306",
                     "databaseSchema": "openmetadata_db",
                 }
@@ -328,7 +344,7 @@ class SupersetUnitTest(TestCase):
 
     def test_dashboard_name(self):
         dashboard_name = self.superset_api.get_dashboard_name(MOCK_DASHBOARD)
-        self.assertEqual(dashboard_name, MOCK_DASHBOARD["dashboard_title"])
+        self.assertEqual(dashboard_name, MOCK_DASHBOARD.dashboard_title)
 
     def test_yield_dashboard(self):
         # TEST API SOURCE
@@ -365,9 +381,11 @@ class SupersetUnitTest(TestCase):
         ), patch.object(
             SupersetAPIClient,
             "fetch_datasource",
-            return_value=mock_data.get("datasource"),
+            return_value=SupersetDatasource(**mock_data["datasource"]),
         ), patch.object(
-            SupersetAPIClient, "fetch_database", return_value=mock_data.get("database")
+            SupersetAPIClient,
+            "fetch_database",
+            return_value=ListDatabaseResult(**mock_data["database"]),
         ):
             fqn = self.superset_api._get_datasource_fqn(  # pylint: disable=protected-access
                 1, MOCK_DB_POSTGRES_SERVICE
@@ -379,12 +397,12 @@ class SupersetUnitTest(TestCase):
         ), patch.object(
             SupersetAPIClient,
             "fetch_datasource",
-            return_value=mock_data.get("datasource"),
+            return_value=SupersetDatasource(**mock_data["datasource"]),
         ), patch.object(
-            SupersetAPIClient, "fetch_database", return_value=NOT_FOUND_RESP
+            SupersetAPIClient, "fetch_database", return_value=ListDatabaseResult()
         ):
             fqn = self.superset_api._get_datasource_fqn(  # pylint: disable=protected-access
-                1, "demo"
+                1, MOCK_DB_POSTGRES_SERVICE
             )
             self.assertEqual(fqn, None)
 

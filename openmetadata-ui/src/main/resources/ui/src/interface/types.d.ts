@@ -12,6 +12,7 @@
  */
 
 declare module 'Models' {
+  import { EntityType } from 'enums/entity.enum';
   import { SearchEntityHits } from 'utils/APIUtils';
   import { CreateDashboardService } from '../generated/api/services/createDashboardService';
   import { CreateDatabaseService } from '../generated/api/services/createDatabaseService';
@@ -155,7 +156,7 @@ declare module 'Models' {
 
   interface RecentlyViewedData {
     displayName?: string;
-    entityType: 'table' | 'topic' | 'dashboard' | 'pipeline';
+    entityType: EntityType;
     fqn: string;
     serviceType?: string;
     timestamp: number;
@@ -223,7 +224,7 @@ declare module 'Models' {
     };
     brokers?: Array<string>;
     schemaRegistry?: string;
-    dashboardUrl?: string;
+    sourceUrl?: string;
     username?: string;
     password?: string;
     url?: string;
@@ -232,7 +233,7 @@ declare module 'Models' {
     api_version?: string;
     server?: string;
     env?: string;
-    pipelineUrl?: string;
+    sourceUrl?: string;
   };
 
   export type ImageShape = 'circle' | 'square';
