@@ -49,9 +49,9 @@ from metadata.generated.schema.entity.services.connections.database.mysqlConnect
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
-from metadata.generated.schema.entity.services.connections.metadata.sasCatalogConnection import (
-    SASCatalogConnection,
-    SasCatalogType,
+from metadata.generated.schema.entity.services.connections.metadata.sasViyaConnection import (
+    SASViyaConnection,
+    SasViyaType,
 )
 from metadata.generated.schema.entity.services.dashboardService import (
     DashboardConnection,
@@ -79,10 +79,8 @@ from metadata.ingestion.ometa.client_utils import get_chart_entities_from_id
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.source.connections import get_connection, get_test_connection_fn
 from metadata.ingestion.source.database.column_type_parser import ColumnTypeParser
-from metadata.ingestion.source.metadata.sascatalog.client import SASCatalogClient
-from metadata.ingestion.source.metadata.sascatalog.extension_attr import (
-    TABLE_CUSTOM_ATTR,
-)
+from metadata.ingestion.source.metadata.sasviya.client import SASViyaClient
+from metadata.ingestion.source.metadata.sasviya.extension_attr import TABLE_CUSTOM_ATTR
 from metadata.profiler.api.models import ProfilerResponse
 from metadata.profiler.sink.metadata_rest import (
     MetadataRestSink,
@@ -94,9 +92,9 @@ from metadata.utils.logger import ingestion_logger
 logger = ingestion_logger()
 
 
-class SascatalogSource(Source):
+class SasviyaSource(Source):
     config: WorkflowSource
-    sasCatalog_client: SASCatalogClient
+    sasCatalog_client: SASViyaClient
 
     def __init__(
         self,
@@ -130,10 +128,10 @@ class SascatalogSource(Source):
     def create(cls, config_dict, metadata_config: OpenMetadataConnection):
         logger.info(f"running create {config_dict}")
         config: WorkflowSource = WorkflowSource.parse_obj(config_dict)
-        connection: SASCatalogConnection = config.serviceConnection.__root__.config
-        if not isinstance(connection, SASCatalogConnection):
+        connection: SASViyaConnection = config.serviceConnection.__root__.config
+        if not isinstance(connection, SASViyaConnection):
             raise InvalidSourceException(
-                f"Expected SASCatalogConnection, but got {connection}"
+                f"Expected SASViyaConnection, but got {connection}"
             )
         return cls(config, metadata_config)
 

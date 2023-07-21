@@ -1,9 +1,9 @@
 source:
-  type: sascatalog
-  serviceName: local_sascatalog
+  type: sasviya
+  serviceName: local_sasviya
   serviceConnection:
     config:
-      type: SASCatalog
+      type: SASViya
       username: username
       password: password
       serverHost: serverHost

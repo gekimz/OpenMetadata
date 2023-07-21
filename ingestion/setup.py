@@ -228,7 +228,7 @@ plugins: Dict[str, Set[str]] = {
     "sagemaker": {VERSIONS["boto3"]},
     "salesforce": {"simple_salesforce==1.11.4"},
     "sap-hana": {"hdbcli", "sqlalchemy-hana"},
-    "sascatalog": {},
+    "sasviya": {},
     "singlestore": {VERSIONS["pymysql"]},
     "sklearn": {VERSIONS["scikit-learn"]},
     "snowflake": {"snowflake-sqlalchemy~=1.4"},

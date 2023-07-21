@@ -1,7 +1,7 @@
 import requests
 
-from metadata.generated.schema.entity.services.connections.metadata.sasCatalogConnection import (
-    SASCatalogConnection,
+from metadata.generated.schema.entity.services.connections.metadata.sasViyaConnection import (
+    SASViyaConnection,
 )
 from metadata.ingestion.ometa.client import REST, APIError, ClientConfig
 from metadata.utils.logger import ingestion_logger
@@ -9,12 +9,12 @@ from metadata.utils.logger import ingestion_logger
 logger = ingestion_logger()
 
 
-class SASCatalogClient:
+class SASViyaClient:
     """
-    Client to interact with SAS Catalog
+    Client to interact with SAS Viya
     """
 
-    def __init__(self, config: SASCatalogConnection):
+    def __init__(self, config: SASViyaConnection):
         self.config = config
         self.auth_token = get_token(
             config.serverHost, config.username, config.password.get_secret_value()
@@ -57,6 +57,7 @@ class SASCatalogClient:
         report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
         filter_state = f"filter=eq(definitionId,'{report_id}')"
         endpoint = f"catalog/instances?{filter_state}&limit=4"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
         headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
         response = self.client._request("GET", path=endpoint, headers=headers)
         if "error" in response.keys():
@@ -73,6 +74,7 @@ class SASCatalogClient:
         data_plan_id = "91eb73eb-6480-4e32-afe6-d7e9f1bc84e8"
         filter_state = f"filter=eq(definitionId, '{data_plan_id}')"
         endpoint = f"catalog/instances?{filter_state}&limit=3"
+        endpoint = f"catalog/instances?{filter_state}&limit=1"
         headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
         response = self.client._request("GET", path=endpoint, headers=headers)
         if "error" in response.keys():
@@ -82,6 +84,16 @@ class SASCatalogClient:
             filter(lambda x: "/dataPlans/plans/" in x["resourceId"], items)
         )
         return filtered_items
+
+    def list_data_flows(self):
+        data_flow_id = "cc0df99e-3f91-468b-ab3f-866110fbda7f"
+        filter_state = f"filter=eq(definitionId, '{data_flow_id}')"
+        endpoint = f"catalog/instances?{filter_state}&limit=3"
+        headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
+        response = self.client._request("GET", path=endpoint, headers=headers)
+        if "error" in response.keys():
+            raise APIError(response["error"])
+        return response["items"]
 
     def get_views(self, query):
         endpoint = "catalog/instances"
