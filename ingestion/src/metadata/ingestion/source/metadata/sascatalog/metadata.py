@@ -122,6 +122,7 @@ class SascatalogSource(Source):
         self.chart_names = None
 
         self.report_description = None
+        self.add_table_custom_attributes()
 
     # self.add_table_custom_attributes()
 
@@ -581,6 +582,7 @@ class SascatalogSource(Source):
             data=json.dumps(table_data),
         )
         table_profile_dict = dict()
+        timestamp = time.time() - 100000
         table_profile_dict["timestamp"] = timestamp
         table_profile_dict["rowCount"] = len(rows)
         table_profile_dict["columnCount"] = len(cols)
@@ -605,6 +607,15 @@ class SascatalogSource(Source):
         sink.write_record(table_profile) """
 
     def add_table_custom_attributes(self):
+        string_type = self.metadata.client.get(path="/metadata/types/name/string")["id"]
+        integer_type = self.metadata.client.get(path="/metadata/types/name/integer")[
+            "id"
+        ]
+        for attr in TABLE_CUSTOM_ATTR:
+            if attr["propertyType"]["id"] == "9fc463a5-84bc-49c8-84f2-acfdcd3dc705":
+                attr["propertyType"]["id"] = string_type
+            else:
+                attr["propertyType"]["id"] = integer_type
         table_type = self.metadata.client.get(path="/metadata/types/name/table")
         table_id = table_type["id"]
         for attr in TABLE_CUSTOM_ATTR:
@@ -716,7 +727,7 @@ class SascatalogSource(Source):
         report_request = CreateDashboardRequest(
             name=report_id,
             displayName=report_instance["name"],
-            dashboardUrl=report_url,
+            sourceUrl=report_url,
             charts=self.chart_names,
             service=self.dashboard_service_name,
             description=self.report_description,
@@ -762,7 +773,7 @@ class SascatalogSource(Source):
             name=data_plan_id,
             displayName=data_plan["name"],
             service=self.dashboard_service_name,
-            dashboardUrl=data_plan_url,
+            sourceUrl=data_plan_url,
         )
         yield data_plan_request
 
