@@ -3,7 +3,6 @@ import re
 import time
 from typing import List
 
-import jsonpatch
 import requests
 from requests.exceptions import HTTPError
 
@@ -42,10 +41,6 @@ from metadata.generated.schema.entity.services.connections.database.customDataba
     CustomDatabaseConnection,
     CustomDatabaseType,
 )
-from metadata.generated.schema.entity.services.connections.database.mysqlConnection import (
-    MysqlConnection,
-    MySQLType,
-)
 from metadata.generated.schema.entity.services.connections.metadata.openMetadataConnection import (
     OpenMetadataConnection,
 )
@@ -62,11 +57,6 @@ from metadata.generated.schema.entity.services.databaseService import (
     DatabaseService,
     DatabaseServiceType,
 )
-from metadata.generated.schema.entity.services.metadataService import (
-    MetadataConnection,
-    MetadataService,
-    MetadataServiceType,
-)
 from metadata.generated.schema.metadataIngestion.workflow import (
     Source as WorkflowSource,
 )
@@ -82,10 +72,6 @@ from metadata.ingestion.source.database.column_type_parser import ColumnTypePars
 from metadata.ingestion.source.metadata.sasviya.client import SASViyaClient
 from metadata.ingestion.source.metadata.sasviya.extension_attr import TABLE_CUSTOM_ATTR
 from metadata.profiler.api.models import ProfilerResponse
-from metadata.profiler.sink.metadata_rest import (
-    MetadataRestSink,
-    MetadataRestSinkConfig,
-)
 from metadata.utils import fqn
 from metadata.utils.logger import ingestion_logger
 
@@ -634,17 +620,6 @@ class SasviyaSource(Source):
             path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/tableProfile",
             data=table_profile_request.json(),
         )
-
-        """
-        # Building Profiler Response
-        table_sample_data = TableData(columns=cols, rows=rows)
-        table_profile = ProfilerResponse(
-            table=table_entity,
-            profile=table_profile_request,
-            sample_data=table_sample_data,
-        )
-        sink = MetadataRestSink(MetadataRestSinkConfig(), self.metadata_config)
-        sink.write_record(table_profile) """
 
     def add_table_custom_attributes(self):
         string_type = self.metadata.client.get(path="/metadata/types/name/string")["id"]
