@@ -76,6 +76,7 @@ import {
   SAGEMAKER,
   SALESFORCE,
   SAP_HANA,
+  SASVIYA,
   SCIKIT,
   serviceTypes,
   SERVICE_TYPE_MAP,
@@ -283,6 +284,9 @@ export const serviceTypeLogo = (type: string) => {
 
     case MetadataServiceType.Amundsen:
       return AMUNDSEN;
+
+    case MetadataServiceType.SASViya:
+      return SASVIYA;
 
     case MetadataServiceType.Atlas:
       return ATLAS;

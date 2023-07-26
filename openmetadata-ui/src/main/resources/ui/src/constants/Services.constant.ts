@@ -67,6 +67,7 @@ import redshift from '../assets/img/service-icon-redshift.png';
 import sagemaker from '../assets/img/service-icon-sagemaker.png';
 import salesforce from '../assets/img/service-icon-salesforce.png';
 import sapHana from '../assets/img/service-icon-sap-hana.png';
+import sasViya from '../assets/img/service-icon-sasviya.svg';
 import scikit from '../assets/img/service-icon-scikit.png';
 import singlestore from '../assets/img/service-icon-singlestore.png';
 import snowflakes from '../assets/img/service-icon-snowflakes.png';
@@ -151,6 +152,7 @@ export const FIVETRAN = fivetran;
 export const AMUNDSEN = amundsen;
 export const ATLAS = atlas;
 export const LOGO = logo;
+export const SASVIYA = sasViya;
 
 export const AIRFLOW = airflow;
 export const PREFECT = prefect;
