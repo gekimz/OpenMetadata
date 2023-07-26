@@ -4,7 +4,7 @@ In this section, we provide guides and references to use the SAS Viya connector.
 
 ## Requirements
 
-For connecting to SAS Viya, make sure the user logging in has access to SAS Viya API's
+For connecting to SAS Viya, make sure the user logging in has access to SAS Viya APIs
 
 ## Connection Details
 

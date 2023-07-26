@@ -188,7 +188,7 @@ TABLE_CUSTOM_ATTR = [
         "propertyType": {"id": "9fc463a5-84bc-49c8-84f2-acfdcd3dc705", "type": "type"},
     },
     {
-        "name": "dataFieldCount",
+        "name": "dateFieldCount",
         "description": "The number of date fields detected in the data set.",
         "propertyType": {"id": "189dc756-717d-4630-8478-e2ffb8866b0f", "type": "type"},
     },

@@ -56,7 +56,7 @@ class SASViyaClient:
     def list_reports(self):
         report_id = "adc13e90-3fea-4d24-b612-4d83514ea965"
         filter_state = f"filter=eq(definitionId,'{report_id}')"
-        endpoint = f"catalog/instances?{filter_state}&limit=4"
+        filter_state = f"filter=contains(name, 'Water Consumption')"
         endpoint = f"catalog/instances?{filter_state}&limit=1"
         headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
         response = self.client._request("GET", path=endpoint, headers=headers)
@@ -73,7 +73,7 @@ class SASViyaClient:
     def list_data_plans(self):
         data_plan_id = "91eb73eb-6480-4e32-afe6-d7e9f1bc84e8"
         filter_state = f"filter=eq(definitionId, '{data_plan_id}')"
-        endpoint = f"catalog/instances?{filter_state}&limit=3"
+        filter_state = f"filter=contains(name, 'Water cluster')"
         endpoint = f"catalog/instances?{filter_state}&limit=1"
         headers = {"Accept-Item": "application/vnd.sas.metadata.instance.entity+json"}
         response = self.client._request("GET", path=endpoint, headers=headers)
@@ -133,7 +133,7 @@ class SASViyaClient:
             if rows_uri and load_uri and cols_uri:
                 break
             if link["rel"] == "rows":
-                rows_uri = link["uri"][1:] + "?limit=1000000"
+                rows_uri = link["uri"][1:]
             if link["rel"] == "load":
                 load_uri = link["uri"][1:]
             if link["rel"] == "columns":
@@ -151,7 +151,7 @@ class SASViyaClient:
         cols = cols_resp["items"]
         col_names = list(map(lambda x: x["name"], cols))
         col_names_proper = list(map(lambda x: x.replace('"', "'"), col_names))
-        return rows, col_names_proper
+        return rows, col_names_proper, rows_resp["count"]
 
     def get_report_link(self, resource, uri):
         revised_uri = uri.replace("/", "%2F")
