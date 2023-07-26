@@ -140,10 +140,10 @@ class SasviyaSource(Source):
 
     def next_record(self):
         self.table_fqns = []
-        table_entities = self.sasCatalog_client.list_instances()
-        for table in table_entities:
-            yield from self.create_table_entity(table)
-        #'''
+        # table_entities = self.sasCatalog_client.list_instances()
+        # for table in table_entities:
+        #     yield from self.create_table_entity(table)
+
         report_entities = self.sasCatalog_client.list_reports()
         yield from self.create_dashboard_service("SAS_reports")
         for report in report_entities:
@@ -185,6 +185,26 @@ class SasviyaSource(Source):
                 self.report_description = str(self.report_description)
             for table in report_tables:
                 yield from self.create_table_entity(table)
+                if "sourceName" in table["attributes"]:
+                    target_table_entity = self.metadata.get_by_name(
+                        entity=Table, fqn=self.table_fqns[-1]
+                    )
+                    source_name = table["attributes"]["sourceName"]
+                    param = f"filter=eq(name, '{source_name}')"
+                    get_instances_with_param = (
+                        self.sasCatalog_client.get_instances_with_param(param)
+                    )
+                    if get_instances_with_param:
+                        source_table = get_instances_with_param[0]
+                        yield from self.create_table_entity(source_table)
+                        source_name = self.table_fqns.pop()
+                        source_table_entity = self.metadata.get_by_name(
+                            entity=Table, fqn=source_name
+                        )
+                        yield from self.create_table_lineage(
+                            source_table_entity, target_table_entity
+                        )
+
             yield from self.create_report_entity(report)
 
         data_plan_entities = self.sasCatalog_client.list_data_plans()
@@ -203,9 +223,31 @@ class SasviyaSource(Source):
                     output_asset_ids.append(rel["endpointId"])
             input_assets = self.create_in_out_tables(input_asset_ids)
             output_assets = self.create_in_out_tables(output_asset_ids)
+            input_table_fqns = []
             for input_asset in input_assets:
                 yield from self.create_table_entity(input_asset)
-            input_fqns = self.table_fqns
+                target_table_entity = self.metadata.get_by_name(
+                    entity=Table, fqn=self.table_fqns[-1]
+                )
+                input_table_fqns.append(self.table_fqns[-1])
+                if "sourceName" in input_asset["attributes"]:
+                    source_name = input_asset["attributes"]["sourceName"]
+                    param = f"filter=eq(name, '{source_name}')"
+                    get_instances_with_param = (
+                        self.sasCatalog_client.get_instances_with_param(param)
+                    )
+                    if get_instances_with_param:
+                        source_table = get_instances_with_param[0]
+                        yield from self.create_table_entity(source_table)
+                        source_table_entity = self.metadata.get_by_name(
+                            entity=Table, fqn=self.table_fqns[-1]
+                        )
+                        self.table_fqns = self.table_fqns[:-1]
+                        yield from self.create_table_lineage(
+                            source_table_entity, target_table_entity
+                        )
+
+            input_fqns = input_table_fqns
             self.table_fqns = []
             for output_asset in output_assets:
                 yield from self.create_table_entity(output_asset)
@@ -573,7 +615,7 @@ class SasviyaSource(Source):
             )
             print(resp.text)
         """
-        rows, cols = self.sasCatalog_client.get_rows_cols(table_resource_id)
+        rows, cols, row_count = self.sasCatalog_client.get_rows_cols(table_resource_id)
         table_data = {"columns": cols, "rows": rows}
         self.metadata.client.put(
             path=f"{self.metadata.get_suffix(Table)}/{table_entity.id.__root__}/sampleData",
@@ -582,7 +624,7 @@ class SasviyaSource(Source):
         table_profile_dict = dict()
         timestamp = time.time() - 100000
         table_profile_dict["timestamp"] = timestamp
-        table_profile_dict["rowCount"] = len(rows)
+        table_profile_dict["rowCount"] = row_count
         table_profile_dict["columnCount"] = len(cols)
         table_profile = TableProfile(**table_profile_dict)
         table_profile_request = CreateTableProfileRequest(
@@ -624,6 +666,9 @@ class SasviyaSource(Source):
     def update_table_custom_attributes(self):
         pass
 
+    def create_table_lineage(self, from_entity, to_entity):
+        yield self.create_lineage_request("table", "table", from_entity, to_entity)
+
     def create_sample_data(self, table_id):
         rows_source, col_names = self.sasCatalog_client.get_rows_cols(table_id)
         rows = list(map(lambda x: x["cells"], rows_source))
@@ -653,6 +698,10 @@ class SasviyaSource(Source):
                 "pie": ChartType.Pie,
                 "timeSeries": ChartType.Line,
                 "wordCloud": ChartType.Text,
+                "dualAxisBarLine": ChartType.Line,
+                "geo": ChartType.Other,
+                "correlation": ChartType.Other,
+                "line": ChartType.Line,
             },
         }
         if chart["@element"] == "Graph":
@@ -687,18 +736,18 @@ class SasviyaSource(Source):
                 param = f"filter=eq(resourceId,'{table_data_resource}')"
                 if "state" in table_resource and table_resource["state"] == "unloaded":
                     self.sasCatalog_client.load_table(table_uri + "/state?value=loaded")
-                table_instance = self.sasCatalog_client.get_instances_with_param(param)[
-                    0
-                ]
-                table_instances.append(table_instance)
+
             except HTTPError as e:
                 self.report_description.append(str(e))
                 name_index = table_uri.rindex("/")
                 table_name = table_uri[name_index + 1 :]
                 param = f"filter=eq(name, '{table_name}')"
-                table_instance = self.sasCatalog_client.get_instances_with_param(param)[
-                    0
-                ]
+
+            get_instances_with_param = self.sasCatalog_client.get_instances_with_param(
+                param
+            )
+            if get_instances_with_param:
+                table_instance = get_instances_with_param[0]
                 table_instances.append(table_instance)
         return table_instances
 
