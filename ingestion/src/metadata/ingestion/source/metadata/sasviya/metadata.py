@@ -108,8 +108,6 @@ class SasviyaSource(Source):
         self.report_description = None
         self.add_table_custom_attributes()
 
-    # self.add_table_custom_attributes()
-
     @classmethod
     def create(cls, config_dict, metadata_config: OpenMetadataConnection):
         logger.info(f"running create {config_dict}")
@@ -126,9 +124,9 @@ class SasviyaSource(Source):
 
     def next_record(self):
         self.table_fqns = []
-        # table_entities = self.sasCatalog_client.list_instances()
-        # for table in table_entities:
-        #     yield from self.create_table_entity(table)
+        table_entities = self.sasCatalog_client.list_instances()
+        for table in table_entities:
+            yield from self.create_table_entity(table)
 
         report_entities = self.sasCatalog_client.list_reports()
         yield from self.create_dashboard_service("SAS_reports")
