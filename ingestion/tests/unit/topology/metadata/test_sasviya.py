@@ -38,7 +38,23 @@ mock_sasviya_config = {
 }
 
 # Mock tables from SAS Viya
-MOCK_TABLES = []
+"""
+Required attributes:
+id : string
+name : string
+attributes: dict
+resourceId : string
+
+"""
+MOCK_TABLES = [{"links": {{"rel": "dataSource", "uri": "..."}}}]
+MOCK_DATA_STORES = [
+    {
+        "name": "data_store",
+        "provierId": "provider",
+        "links": {{"rel": "parent", "uri": "/parent"}},
+    }
+]
+MOCK_PARENT_DATA_STORES = [{"id": "parent_data_store_0", "name": "parent_data_store"}]
 MOCK_REPORTS = []
 EXPECTED_RESULTS = []
 
@@ -67,7 +83,24 @@ class SasviyaUnitTest(TestCase):
             if report["id"] == id:
                 return report
 
+    def mock_get_views(self, query):
+        return {"entities": {}}
+
+    def mock_get_resource(self, endpoint):
+        # This is for the mock table
+        return ()
+
+    def mock_get_data_source(self, endpoint):
+        # This is for the mock data store
+        # Add conditionals for specific id/names of resources using the endpoint being passed
+        pass
+
+    # For the parent data store
+
     @patch.object(SASViyaClient, "list_reports", mock_list_reports)
     @patch.object(SASViyaClient, "get_instance", mock_get_instance)
+    @patch.object(SASViyaClient, "get_views", mock_get_views)
+    @patch.object(SASViyaClient, "get_resource", mock_get_resource)
+    @patch.object(SASViyaClient, "get_data_source", mock_get_data_source)
     def test_lineage(self):
         pass
