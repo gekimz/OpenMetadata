@@ -151,8 +151,10 @@ public class ReportResource extends EntityResource<Report, ReportRepository> {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Report.class))),
         @ApiResponse(responseCode = "400", description = "Bad request")
       })
+  @Override
   public Response create(@Context UriInfo uriInfo, @Context SecurityContext securityContext, @Valid Report report)
       throws IOException {
+
     addToReport(securityContext, report);
     return super.create(uriInfo, securityContext, report);
   }

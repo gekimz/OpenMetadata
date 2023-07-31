@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import javax.json.JsonPatch;
+import javax.validation.Valid;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.core.UriInfo;
@@ -213,14 +215,16 @@ public abstract class EntityResource<T extends EntityInterface, K extends Entity
     return addHref(uriInfo, repository.getByName(uriInfo, name, fields, include));
   }
 
-  public Response create(UriInfo uriInfo, SecurityContext securityContext, T entity) throws IOException {
+  public Response create(@Context UriInfo uriInfo, @Context SecurityContext securityContext, @Valid T entity)
+      throws IOException {
     OperationContext operationContext = new OperationContext(entityType, CREATE);
     authorizer.authorize(securityContext, operationContext, getResourceContext());
     entity = addHref(uriInfo, repository.create(uriInfo, entity));
     return Response.created(entity.getHref()).entity(entity).build();
   }
 
-  public Response createOrUpdate(UriInfo uriInfo, SecurityContext securityContext, T entity) throws IOException {
+  public Response createOrUpdate(@Context UriInfo uriInfo, @Context SecurityContext securityContext, @Valid T entity)
+      throws IOException {
     repository.prepareInternal(entity);
 
     // If entity does not exist, this is a create operation, else update operation
