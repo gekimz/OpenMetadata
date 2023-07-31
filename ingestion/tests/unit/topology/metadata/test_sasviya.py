@@ -46,7 +46,22 @@ attributes: dict
 resourceId : string
 
 """
-MOCK_TABLES = [{"links": {{"rel": "dataSource", "uri": "..."}}}]
+MOCK_TABLES = [
+    {
+        "id": "",
+        "name": "",
+        "attributes": {},
+        "resourceId": "",
+        "links": {{"rel": "dataSource", "uri": "..."}},
+    },
+    {
+        "id": "",
+        "name": "",
+        "attributes": {},
+        "resourceId": "",
+        "links": {{"rel": "dataSource", "uri": "..."}},
+    },
+]
 MOCK_DATA_STORES = [
     {
         "name": "data_store",
@@ -55,7 +70,17 @@ MOCK_DATA_STORES = [
     }
 ]
 MOCK_PARENT_DATA_STORES = [{"id": "parent_data_store_0", "name": "parent_data_store"}]
-MOCK_REPORTS = []
+MOCK_DATAPLAN = [
+    {
+        "id": "",
+        "name": "",
+        "resourceId": "",
+        "relationships": {
+            {"definitionId": "", "endpointId": ""},
+            {"definitionId": "", "endpointId": ""},
+        },
+    }
+]
 EXPECTED_RESULTS = []
 
 
@@ -79,9 +104,9 @@ class SasviyaUnitTest(TestCase):
         for table in MOCK_TABLES:
             if table["id"] == id:
                 return table
-        for report in MOCK_REPORTS:
-            if report["id"] == id:
-                return report
+        for dataplan in MOCK_DATAPLAN:
+            if dataplan["id"] == id:
+                return dataplan
 
     def mock_get_views(self, query):
         return {"entities": {}}
@@ -95,7 +120,8 @@ class SasviyaUnitTest(TestCase):
         # Add conditionals for specific id/names of resources using the endpoint being passed
         pass
 
-    # For the parent data store
+    def mock_get_report_link(self, resource, link):
+        return ""
 
     @patch.object(SASViyaClient, "list_reports", mock_list_reports)
     @patch.object(SASViyaClient, "get_instance", mock_get_instance)
